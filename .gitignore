@@ -1,0 +1,53 @@
+# ==============================================================================
+# .gitignore for AMD ZCU106 Unified Neural Accelerator
+# ==============================================================================
+
+# Vivado build projects & checkpoints
+fpga/vivado_prj/
+.Xil/
+*.dcp
+
+# Vivado Simulator generated files & databases
+sim/xsim.dir/
+xsim.dir/
+*.wdb
+*.jou
+*.backup.jou
+*.pb
+*.log
+xsimcrash.log
+xsimkernel.log
+xvlog.pb
+xelab.pb
+xsim.dbg
+xsim.mem
+xsim.reloc
+xsim.rtti
+xsim.svtype
+xsim.type
+xsim.xdbg
+xsimk.exe
+xsimSettings.ini
+xsim_script.tcl
+
+# Intermediate hex dumps generated during simulations
+sim/*.hex
+*.hex
+
+# Vitis temporary workspaces & Eclipse metadata
+baremetal/vitis_ws/
+.metadata/
+
+# Object files & build intermediate artifacts
+*.o
+baremetal/build/*.o
+
+# Python caches & virtual environments
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+env/
+
+# Raw downloaded MNIST dataset cache (automatically fetched by PyTorch)
+data/MNIST/
