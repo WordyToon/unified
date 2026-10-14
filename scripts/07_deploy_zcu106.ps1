@@ -18,7 +18,10 @@ param(
     [ValidateSet("8bit", "16bit")]
     [string]$Precision = "8bit",
 
-    [ValidateSet("auto", "dog", "car", "cat", "aeroplane", "digit7")]
+    [ValidateSet("auto", "dog", "car", "cat", "aeroplane",
+                 "digit0", "digit1", "digit2", "digit3", "digit4",
+                 "digit5", "digit6", "digit7", "digit8", "digit9",
+                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9")]
     [string]$Image = "auto",
 
     [string]$Port = ""
@@ -37,6 +40,8 @@ if ($TestImage -eq "auto") {
     } else {
         $TestImage = "dog"
     }
+} elseif ($TestImage -match '^[0-9]$') {
+    $TestImage = "digit$TestImage"
 }
 
 Write-Host "================================================================================" -ForegroundColor Cyan

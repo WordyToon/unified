@@ -234,7 +234,9 @@ The repository includes numbered PowerShell automation scripts for end-to-end ex
 .\scripts\06_run_simulations.ps1 -Model efficientnetb0 -Precision 8bit
 
 # 7. Turnkey JTAG deployment to AMD ZCU106 hardware
+# (Supports any MNIST digit: digit0..digit9 or simply 0..9)
 .\scripts\07_deploy_zcu106.ps1 -Model mnist -Precision 8bit -Image digit7
+.\scripts\07_deploy_zcu106.ps1 -Model mnist -Precision 8bit -Image digit3
 .\scripts\07_deploy_zcu106.ps1 -Model resnet50 -Precision 8bit -Image dog
 .\scripts\07_deploy_zcu106.ps1 -Model all -Precision 8bit
 

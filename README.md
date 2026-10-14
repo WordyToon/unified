@@ -63,8 +63,10 @@ Open PowerShell in the `unified/` project root directory and run:
 # 1. Run All 4 Models Sequentially (MNIST -> ResNet-50 -> MobileNetV2 -> EfficientNet-B0)
 .\scripts\07_deploy_zcu106.ps1 -Model all -Precision 8bit
 
-# 2. Run MNIST LeNet-5 Digit Classification (Tests digit 7)
+# 2. Run MNIST LeNet-5 Digit Classification (Supports any digit: digit0..digit9 or 0..9)
 .\scripts\07_deploy_zcu106.ps1 -Model mnist -Precision 8bit -Image digit7
+.\scripts\07_deploy_zcu106.ps1 -Model mnist -Precision 8bit -Image digit3
+.\scripts\07_deploy_zcu106.ps1 -Model mnist -Precision 8bit -Image 0
 
 # 3. Run Full ResNet-50 on ImageNet Image "dog" (8-bit)
 .\scripts\07_deploy_zcu106.ps1 -Model resnet50 -Precision 8bit -Image dog
