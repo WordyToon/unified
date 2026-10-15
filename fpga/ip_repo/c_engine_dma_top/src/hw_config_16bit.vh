@@ -1,13 +1,13 @@
 // =============================================================================
 // File: unified/rtl/hw_config_16bit.vh
 // Description: Unified Hardware Configuration Header for c_engine RTL (INT16).
-// Target: AMD Zynq UltraScale+ ZCU104 Evaluation Kit
+// Target: AMD Zynq UltraScale+ ZCU106 Evaluation Kit
 // Specifications:
 //   - Array Dimensions: 8 Rows x 32 Columns (256 Processing Elements)
-//   - Clock Frequency: 100.0 MHz (10.0 ns clock period)
+//   - Clock Frequency: 70.0 MHz (14.29 ns clock period)
 //   - Precision: INT16 Inputs/Weights, INT32 Biases, INT48 Accumulators
-//   - Memory: 32 Banks, 128 bits/bank (512 B/row), Depth 2048 rows (1024 KB = 1 MB)
-//   - Microcode Capacity: Up to 64 96-bit instruction words
+//   - Memory: 32 Banks, 128 bits/bank (512 B/row), Depth 4096 rows (2.10 MB, 64 URAMs)
+//   - Microcode Capacity: Up to 256 128-bit instruction words
 // =============================================================================
 
 `ifndef HW_CONFIG_VH

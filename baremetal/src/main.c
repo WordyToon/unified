@@ -36,36 +36,7 @@
 #define CLOCK_FREQ_STR          "75.0"
 #endif
 
-// Standard ImageNet Class Labels (Representative subset for console printing)
-static const char *sample_imagenet_labels[1000] = {
-    [0]   = "tench, Tinca tinca",
-    [1]   = "goldfish, Carassius auratus",
-    [2]   = "great white shark",
-    [151] = "Chihuahua",
-    [152] = "Japanese spaniel",
-    [153] = "Maltese dog",
-    [176] = "Saluki, gazelle hound",
-    [205] = "flat-coated retriever",
-    [207] = "golden retriever",
-    [208] = "Labrador retriever",
-    [212] = "English setter",
-    [213] = "Irish setter, red setter",
-    [215] = "Brittany spaniel",
-    [219] = "cocker spaniel",
-    [263] = "Pembroke, Welsh corgi",
-    [281] = "tabby, tabby cat",
-    [282] = "tiger cat",
-    [285] = "Egyptian cat",
-    [404] = "airliner",
-    [511] = "convertible",
-    [656] = "minivan",
-    [751] = "race car, racer",
-    [817] = "sports car, sport car",
-    [829] = "street sign",
-    [852] = "tennis ball",
-    [920] = "traffic light, traffic signal",
-    [980] = "volcano"
-};
+#include "imagenet_classes.h"
 
 static const char *mnist_labels[10] = {
     "Digit 0", "Digit 1", "Digit 2", "Digit 3", "Digit 4",
@@ -96,11 +67,15 @@ void print_banner(void) {
 int run_model_inference(const char *model_name, const uint32_t *uops_table, uint32_t num_uops,
                         uint32_t num_classes, uint32_t num_chunks,
                         uint32_t rd_beats, const char *const *class_names,
-                        uintptr_t img_base_addr, uintptr_t wt_base_addr) {
+                        uintptr_t img_base_addr, uintptr_t wt_base_addr,
+                        uint32_t sram_in_row,
+                        uintptr_t raw_img_addr, uint32_t raw_img_beats) {
     PRINT("\r\n--------------------------------------------------------------------------------\r\n");
     PRINT("  Executing Model: %s (%u uops, %u classes, %u spatial chunks)\r\n",
           model_name, num_uops, num_classes, num_chunks);
     PRINT("--------------------------------------------------------------------------------\r\n");
+
+    int status = 0;
 
     // 1. Reset accelerator
     c_engine_soft_reset(&g_accel);
@@ -109,16 +84,29 @@ int run_model_inference(const char *model_name, const uint32_t *uops_table, uint
     PRINT("[*] Programming Sequencer microcode from compiled table (%u uops)...\r\n", num_uops);
     c_engine_program_microcode_raw(&g_accel, uops_table, num_uops * 5);
 
-    // 3. Stream input image from DDR to SRAM Row 0
-    PRINT("[*] Streaming input image from DDR (0x%08X) to SRAM Row 0 (%u beats)...\r\n",
-          (unsigned int)img_base_addr, rd_beats);
-    int status = c_engine_stream_input(&g_accel, img_base_addr, 0x00000000, rd_beats);
-    if (status != 0) {
-        PRINT("[-] Read DMA failed or timed out! Status: %d\r\n", status);
-        return -1;
+    // 3. If raw 224x224 RGB image chunks provided, stream to SRAM Row 0
+    if (raw_img_addr != 0 && raw_img_beats > 0) {
+        PRINT("[*] Streaming input image chunks from DDR (0x%08X) to SRAM Row 0 (%u beats)...\r\n",
+              (unsigned int)raw_img_addr, raw_img_beats);
+        int status_raw = c_engine_stream_input(&g_accel, raw_img_addr, 0x00000000, raw_img_beats);
+        if (status_raw != 0) {
+            PRINT("[-] Raw image streaming DMA failed! Status: %d\r\n", status_raw);
+            return -1;
+        }
     }
 
-    // 4. Trigger autonomous systolic inference
+    // 4. Stream input data tensor from DDR to SRAM Row if specified
+    if (rd_beats > 0 && img_base_addr != 0) {
+        PRINT("[*] Streaming input tensor from DDR (0x%08X) to SRAM Row %u (%u beats)...\r\n",
+              (unsigned int)img_base_addr, sram_in_row, rd_beats);
+        int status = c_engine_stream_input(&g_accel, img_base_addr, sram_in_row, rd_beats);
+        if (status != 0) {
+            PRINT("[-] Read DMA failed or timed out! Status: %d\r\n", status);
+            return -1;
+        }
+    }
+
+    // 5. Trigger autonomous systolic inference
     PRINT("[*] Triggering Autonomous Hardware Compute Engine (Weights @ 0x%08X)...\r\n", (unsigned int)wt_base_addr);
     uint64_t cycles = 0;
     status = c_engine_run_inference(&g_accel, wt_base_addr, DDR_ACCEL_LOGITS_BASE, num_chunks, &cycles);
@@ -201,74 +189,83 @@ int main(void) {
     volatile uint32_t model_sel = *(volatile uint32_t *)DDR_ACCEL_MODEL_SEL_BASE;
     PRINT("[*] Target Execution Mode: %s (Mailbox Code: %u)\r\n",
           (model_sel == 1) ? "MNIST LeNet-5 Only" :
-          (model_sel == 2) ? "ResNet-50 Full Backbone Only" :
-          (model_sel == 3) ? "MobileNetV2 Only" :
-          (model_sel == 4) ? "EfficientNet-B0 Only" : "All 4 Vision Models Sequentially",
+          (model_sel == 2) ? "ResNet-50 Full 53-Layer Backbone on FPGA" :
+          (model_sel == 3) ? "MobileNetV2 Full Backbone on FPGA" :
+          (model_sel == 4) ? "EfficientNet-B0 Full Backbone on FPGA" :
+          (model_sel == 5) ? "ResNet-50 Standalone GEMV Head Only" :
+          "All Vision Models Sequentially",
           (unsigned int)model_sel);
 
     // =========================================================================
     // 1. MNIST LeNet-5 Evaluation
     // =========================================================================
     if (model_sel == 0 || model_sel == 1) {
-        PRINT("\r\n[1/4] Running MNIST LeNet-5 Digit Classification...\r\n");
+        PRINT("\r\n[1/4] Running MNIST LeNet-5 Digit Classification on FPGA...\r\n");
         uint32_t mnist_wt_beats = (TARGET_PRECISION == 16) ? 8192 : 4096;
         uint32_t mnist_img_beats = (TARGET_PRECISION == 16) ? 128 : 64;
         PRINT("[*] Preloading MNIST weights from DDR (0x%08X) to SRAM Row 0 (%u beats)...\r\n",
               DDR_ACCEL_MNIST_WT_BASE, mnist_wt_beats);
         c_engine_stream_input(&g_accel, DDR_ACCEL_MNIST_WT_BASE, 0x00000000, mnist_wt_beats);
         run_model_inference("MNIST LeNet-5", mnist_uops, NUM_UOPS_MNIST_UOPS, 10, 1, mnist_img_beats, mnist_labels,
-                            DDR_ACCEL_MNIST_IMG_BASE, 0x00000000);
+                            DDR_ACCEL_MNIST_IMG_BASE, 0x00000000, 0, 0, 0);
     }
 
     // =========================================================================
-    // 2. ResNet-50 Full 50-Layer Architecture Evaluation
+    // 2. ResNet-50 Full 53-Layer Backbone Evaluation (1,000 ImageNet Classes)
     // =========================================================================
     if (model_sel == 0 || model_sel == 2) {
-        PRINT("\r\n[2/4] Running Full ResNet-50 Architecture (1,000 ImageNet Classes)...\r\n");
-        uint32_t r50_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
-#if (TARGET_PRECISION == 16)
-        const uint32_t *r50_uops = resnet50_16bit_uops;
-        uint32_t r50_uop_count = NUM_UOPS_RESNET50_16BIT_UOPS;
-#else
-        const uint32_t *r50_uops = resnet50_8bit_uops;
-        uint32_t r50_uop_count = NUM_UOPS_RESNET50_8BIT_UOPS;
-#endif
-        run_model_inference("ResNet-50 Full Backbone", r50_uops, r50_uop_count, 1000, 196, r50_beats,
-                            sample_imagenet_labels, DDR_ACCEL_IMAGENET_IMG_BASE, DDR_ACCEL_R50_WT_BASE);
+        PRINT("\r\n[2/4] Running ResNet-50 Full 53-Layer Backbone on FPGA (1,000 Classes)...\r\n");
+        uint32_t raw_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
+
+        run_model_inference("ResNet-50 Full 53-Layer Convolutional Backbone",
+                            (TARGET_PRECISION == 16) ? resnet50_16bit_uops : resnet50_8bit_uops,
+                            (TARGET_PRECISION == 16) ? NUM_UOPS_RESNET50_16BIT_UOPS : NUM_UOPS_RESNET50_8BIT_UOPS,
+                            1000, 1, 0, imagenet_classes, 0,
+                            DDR_ACCEL_R50_WT_BASE, 0, DDR_ACCEL_IMAGENET_IMG_BASE, raw_beats);
     }
 
     // =========================================================================
-    // 3. MobileNetV2 Architecture Evaluation
+    // 3. MobileNetV2 Architecture Evaluation (1,000 ImageNet Classes)
     // =========================================================================
     if (model_sel == 0 || model_sel == 3) {
-        PRINT("\r\n[3/4] Running MobileNetV2 Architecture (1,000 ImageNet Classes)...\r\n");
-        uint32_t mbv2_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
-#if (TARGET_PRECISION == 16)
-        const uint32_t *mbv2_uops = mobilenetv2_16bit_uops;
-        uint32_t mbv2_uop_count = NUM_UOPS_MOBILENETV2_16BIT_UOPS;
-#else
-        const uint32_t *mbv2_uops = mobilenetv2_8bit_uops;
-        uint32_t mbv2_uop_count = NUM_UOPS_MOBILENETV2_8BIT_UOPS;
-#endif
-        run_model_inference("MobileNetV2 Inverted Residual", mbv2_uops, mbv2_uop_count, 1000, 196, mbv2_beats,
-                            sample_imagenet_labels, DDR_ACCEL_IMAGENET_IMG_BASE, DDR_ACCEL_MBV2_WT_BASE);
+        PRINT("\r\n[3/4] Running MobileNetV2 Architecture on FPGA (1,000 Classes)...\r\n");
+        uint32_t raw_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
+
+        run_model_inference("MobileNetV2 Full Backbone (1,000 Classes)",
+                            (TARGET_PRECISION == 16) ? mobilenetv2_16bit_uops : mobilenetv2_8bit_uops,
+                            (TARGET_PRECISION == 16) ? NUM_UOPS_MOBILENETV2_16BIT_UOPS : NUM_UOPS_MOBILENETV2_8BIT_UOPS,
+                            1000, 1, 0, imagenet_classes, 0,
+                            DDR_ACCEL_MBV2_WT_BASE, 0, DDR_ACCEL_IMAGENET_IMG_BASE, raw_beats);
     }
 
     // =========================================================================
-    // 4. EfficientNet-B0 Architecture Evaluation
+    // 4. EfficientNet-B0 Architecture Evaluation (1,000 ImageNet Classes)
     // =========================================================================
     if (model_sel == 0 || model_sel == 4) {
-        PRINT("\r\n[4/4] Running EfficientNet-B0 Architecture (1,000 ImageNet Classes)...\r\n");
-        uint32_t eff_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
-#if (TARGET_PRECISION == 16)
-        const uint32_t *eff_uops = efficientnetb0_16bit_uops;
-        uint32_t eff_uop_count = NUM_UOPS_EFFICIENTNETB0_16BIT_UOPS;
-#else
-        const uint32_t *eff_uops = efficientnetb0_8bit_uops;
-        uint32_t eff_uop_count = NUM_UOPS_EFFICIENTNETB0_8BIT_UOPS;
-#endif
-        run_model_inference("EfficientNet-B0 MBConv", eff_uops, eff_uop_count, 1000, 196, eff_beats,
-                            sample_imagenet_labels, DDR_ACCEL_IMAGENET_IMG_BASE, DDR_ACCEL_EFF_WT_BASE);
+        PRINT("\r\n[4/4] Running EfficientNet-B0 Architecture on FPGA (1,000 Classes)...\r\n");
+        uint32_t raw_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
+
+        run_model_inference("EfficientNet-B0 Full Backbone (1,000 Classes)",
+                            (TARGET_PRECISION == 16) ? efficientnetb0_16bit_uops : efficientnetb0_8bit_uops,
+                            (TARGET_PRECISION == 16) ? NUM_UOPS_EFFICIENTNETB0_16BIT_UOPS : NUM_UOPS_EFFICIENTNETB0_8BIT_UOPS,
+                            1000, 1, 0, imagenet_classes, 0,
+                            DDR_ACCEL_EFF_WT_BASE, 0, DDR_ACCEL_IMAGENET_IMG_BASE, raw_beats);
+    }
+
+    // =========================================================================
+    // 5. Standalone Fast GEMV Verification Head (Sub-second Sanity Check)
+    // =========================================================================
+    if (model_sel == 5) {
+        PRINT("\r\n[Fast Check] Running Standalone GEMV Classification Head (1,000 Classes)...\r\n");
+        uint32_t raw_beats = (TARGET_PRECISION == 16) ? 18816 : 9408;
+        uint32_t feat_beats = (TARGET_PRECISION == 16) ? 1920 : 960;
+        uintptr_t feat_addr = DDR_ACCEL_IMAGENET_IMG_BASE + DDR_ACCEL_R50_FEAT_OFFSET;
+        volatile uint32_t *p_gemv = (volatile uint32_t *)(DDR_ACCEL_R50_WT_BASE + DDR_ACCEL_R50_GEMV_WT_OFFSET);
+
+        run_model_inference("ResNet-50 Standalone GEMV Head (1,000 Classes)",
+                            resnet50_gemv_8bit_uops, NUM_UOPS_RESNET50_GEMV_8BIT_UOPS,
+                            1000, 1, feat_beats, imagenet_classes, feat_addr,
+                            (uintptr_t)p_gemv, 2100, DDR_ACCEL_IMAGENET_IMG_BASE, raw_beats);
     }
 
     PRINT("\r\n================================================================================\r\n");

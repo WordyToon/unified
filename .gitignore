@@ -51,3 +51,11 @@ env/
 
 # Raw downloaded MNIST dataset cache (automatically fetched by PyTorch)
 data/MNIST/
+
+# Local scratch directory
+scratch/
+
+# Local PYNQ export test directory
+pynq/
+
+

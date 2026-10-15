@@ -134,8 +134,8 @@ module c_engine_controller #(
     // -------------------------------------------------------------------------
     reg [CFG_ADDR_WIDTH-1:0] pc;
     reg [1:0]                dec_mode;
-    reg [7:0]                dec_chin;
-    reg [7:0]                dec_chout;
+    reg [11:0]               dec_chin;
+    reg [11:0]               dec_chout;
     reg [3:0]                dec_kw;
     reg [3:0]                dec_kh;
     reg [4:0]                dec_shift_bits;
@@ -158,8 +158,8 @@ module c_engine_controller #(
 
     // Active Layer Configuration Multiplexers
     wire [1:0]            active_mode             = (cfg_mode_select == 1'b1) ? dec_mode             : {1'b0, mode};
-    wire [7:0]            active_chin             = (cfg_mode_select == 1'b1) ? dec_chin             : cfg_chin;
-    wire [7:0]            active_chout            = (cfg_mode_select == 1'b1) ? dec_chout            : cfg_chout;
+    wire [11:0]           active_chin             = (cfg_mode_select == 1'b1) ? dec_chin             : {4'd0, cfg_chin};
+    wire [11:0]           active_chout            = (cfg_mode_select == 1'b1) ? dec_chout            : {4'd0, cfg_chout};
     wire [3:0]            active_kw               = (cfg_mode_select == 1'b1) ? dec_kw               : cfg_kw;
     wire [3:0]            active_kh               = (cfg_mode_select == 1'b1) ? dec_kh               : cfg_kh;
     wire [4:0]            active_shift_bits       = (cfg_mode_select == 1'b1) ? dec_shift_bits       : cfg_shift_bits;
@@ -246,38 +246,81 @@ module c_engine_controller #(
     reg [31:0] current_wt_ddr_offset;
     reg [31:0] stage0_total_wt_bytes;
 
+    // Hardware Global Average Pooling (GAP) Engine registers
+    reg [7:0]                     gap_ch_idx;
+    reg [ADDR_WIDTH-1:0]          last_conv_out_addr;
+    reg                           gap_executed;
+    reg [NUM_BANKS*WORD_SIZE-1:0] gap_row_buf;
+
+    reg signed [17:0] sum_grp_reg [0:7];
+    integer g_idx, p_sub_idx;
+    reg signed [17:0] gap_tmp_sum;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            for (g_idx = 0; g_idx < 8; g_idx = g_idx + 1)
+                sum_grp_reg[g_idx] <= 18'sd0;
+        end else if (state == S_POOL_WAIT) begin
+            for (g_idx = 0; g_idx < 8; g_idx = g_idx + 1) begin
+                gap_tmp_sum = 18'sd0;
+                for (p_sub_idx = 0; p_sub_idx < 32; p_sub_idx = p_sub_idx + 1) begin
+                    if (w_DATA_WIDTH == 16) begin
+                        if ((g_idx*32 + p_sub_idx) < 128)
+                            gap_tmp_sum = gap_tmp_sum + $signed(mem_dout_b[(g_idx*32 + p_sub_idx)*16 +: 16]);
+                    end else begin
+                        gap_tmp_sum = gap_tmp_sum + $signed(mem_dout_b[(g_idx*32 + p_sub_idx)*8 +: 8]);
+                    end
+                end
+                sum_grp_reg[g_idx] <= gap_tmp_sum;
+            end
+        end
+    end
+
+    wire signed [20:0] spatial_sum = sum_grp_reg[0] + sum_grp_reg[1] + sum_grp_reg[2] + sum_grp_reg[3] +
+                                     sum_grp_reg[4] + sum_grp_reg[5] + sum_grp_reg[6] + sum_grp_reg[7];
+
+    wire signed [x_DATA_WIDTH-1:0] spatial_mean = (w_DATA_WIDTH == 16) ?
+        (spatial_sum >>> 7) : (spatial_sum >>> 8);
+
     // Tile dimension parameters
-    // Tile dimension parameters
+    wire [15:0] ext_chin  = {4'd0, active_chin};
+    wire [15:0] ext_chout = {4'd0, active_chout};
+
     wire [7:0] tile_tin  = (active_mode == 2'b11) ? 8'd1 :
                            (active_kw >= 4'd7) ? 8'd3 : (active_kw >= 4'd3) ? 8'd8  : 8'd32;
     wire [7:0] tile_tout = (active_mode == 2'b11) ? 8'd32 :
                            (active_kw >= 4'd7) ? 8'd8 : (active_kw >= 4'd3) ? 8'd16 : 8'd32;
 
     wire [7:0] num_ic_tiles = (active_mode == 2'b11) ? 8'd1 :
-                              (active_chin <= tile_tin) ? 8'd1 :
-                              (active_kw >= 4'd7) ? 8'd1 :
-                              (active_kw >= 4'd3) ? ((active_chin + 8'd7) >> 3) :
-                              ((active_chin + 8'd31) >> 5);
+                              (ext_chin <= {8'd0, tile_tin}) ? 8'd1 :
+                              (active_kw >= 4'd7) ? ((ext_chin + 16'd2) / 16'd3) :
+                              (active_kw >= 4'd3) ? ((ext_chin + 16'd7) >> 3) :
+                              ((ext_chin + 16'd31) >> 5);
 
-    wire [7:0] num_oc_tiles = (active_chout <= tile_tout) ? 8'd1 :
-                              (active_mode == 2'b11) ? ((active_chout + 8'd31) >> 5) :
-                              (active_kw >= 4'd7) ? ((active_chout + 8'd7) >> 3) :
-                              (active_kw >= 4'd3) ? ((active_chout + 8'd15) >> 4) :
-                              ((active_chout + 8'd31) >> 5);
+    wire [7:0] num_oc_tiles = (ext_chout <= {8'd0, tile_tout}) ? 8'd1 :
+                              (active_mode == 2'b11) ? ((ext_chout + 16'd31) >> 5) :
+                              (active_kw >= 4'd7) ? ((ext_chout + 16'd7) >> 3) :
+                              (active_kw >= 4'd3) ? ((ext_chout + 16'd15) >> 4) :
+                              ((ext_chout + 16'd31) >> 5);
 
-    wire [7:0] oc_offset = (active_mode == 2'b11) ? {tile_oc_cnt[2:0], 5'b00000} :
-                           (active_kw >= 4'd7) ? {tile_oc_cnt[4:0], 3'b000} :
-                           (active_kw >= 4'd3) ? {tile_oc_cnt[3:0], 4'b0000} :
-                           {tile_oc_cnt[2:0], 5'b00000};
+    wire [ADDR_WIDTH-1:0] oc_offset = (active_mode == 2'b11) ? ({ {(ADDR_WIDTH-8){1'b0}}, tile_oc_cnt } << 5) :
+                                      (active_kw >= 4'd7)   ? ({ {(ADDR_WIDTH-8){1'b0}}, tile_oc_cnt } << 3) :
+                                      (active_kw >= 4'd3)   ? ({ {(ADDR_WIDTH-8){1'b0}}, tile_oc_cnt } << 4) :
+                                      ({ {(ADDR_WIDTH-8){1'b0}}, tile_oc_cnt } << 5);
 
-    wire [7:0] ic_offset = (active_mode == 2'b11) ? oc_offset :
-                           (active_kw >= 4'd7) ? 8'd0 :
-                           (active_kw >= 4'd3) ? {tile_ic_cnt[4:0], 3'b000} :
-                           {tile_ic_cnt[2:0], 5'b00000};
+    wire [ADDR_WIDTH-1:0] ic_offset = (active_mode == 2'b11) ? oc_offset :
+                                      (active_kw >= 4'd7)   ? {ADDR_WIDTH{1'b0}} :
+                                      (active_kw >= 4'd3)   ? ({ {(ADDR_WIDTH-8){1'b0}}, tile_ic_cnt } << 3) :
+                                      ({ {(ADDR_WIDTH-8){1'b0}}, tile_ic_cnt } << 5);
 
+    wire [15:0] eff_chin_rem = (ext_chin > { {(16-ADDR_WIDTH){1'b0}}, ic_offset }) ?
+                               (ext_chin - { {(16-ADDR_WIDTH){1'b0}}, ic_offset }) : 16'd0;
     wire [7:0] cur_tile_chin = (active_mode == 2'b11) ? 8'd1 :
-                               (active_chin - ic_offset < tile_tin) ? (active_chin - ic_offset) : tile_tin;
-    wire [7:0] cur_tile_chout = (active_chout - oc_offset < tile_tout) ? (active_chout - oc_offset) : tile_tout;
+                               (eff_chin_rem < {8'd0, tile_tin}) ? eff_chin_rem[7:0] : tile_tin;
+
+    wire [15:0] eff_chout_rem = (ext_chout > { {(16-ADDR_WIDTH){1'b0}}, oc_offset }) ?
+                                (ext_chout - { {(16-ADDR_WIDTH){1'b0}}, oc_offset }) : 16'd0;
+    wire [7:0] cur_tile_chout = (eff_chout_rem < {8'd0, tile_tout}) ? eff_chout_rem[7:0] : tile_tout;
 
     // Weights per tile
     wire [15:0] cur_tile_weights = (active_mode == 2'b00) ?
@@ -285,19 +328,19 @@ module c_engine_controller #(
          ((tile_ic_cnt == num_ic_tiles - 1) ? ({14'd0, cur_tile_chout} << 1) : 16'd0)) :
         (active_mode == 2'b11) ?
         ({8'd0, cur_tile_chout} * {12'd0, active_kh * active_kw} + ({14'd0, cur_tile_chout} << 1)) :
-        ({8'd0, active_chout} * {8'd0, active_chin});
+        ({8'd0, active_chout[7:0]} * {8'd0, active_chin[7:0]});
 
     localparam CHUNK_SIZE   = (NUM_BANKS * WORD_SIZE) / w_DATA_WIDTH;
     localparam BEAT_WEIGHTS = 128 / w_DATA_WIDTH; // 16 for INT8, 8 for INT16
     wire [15:0] cur_tile_beats = (active_mode == 2'b01) ?
-        ({8'd0, active_chin} * NUM_BANKS) :
+        ({8'd0, active_chin[7:0]} * NUM_BANKS) :
         ((w_DATA_WIDTH == 8) ?
             ((cur_tile_weights + 16'd15) >> 4) :
             ((cur_tile_weights + 16'd7) >> 3));
 
     wire [15:0] cur_tile_chunks = (cur_tile_weights + 16'd255) >> 8;
     wire [15:0] num_weight_chunks = (active_mode == 2'b01) ?
-        ((({24'd0, active_chout} * {24'd0, active_chin}) + 32'd255) >> 8) :
+        ((({20'd0, active_chout} * {20'd0, active_chin}) + 32'd255) >> 8) :
         cur_tile_chunks;
 
     // Registered stride and bias base for fast non-blocking weight indexing
@@ -345,6 +388,8 @@ module c_engine_controller #(
         2'b00 : // Linear Passthrough for intermediate partial sums
         active_act_type;
 
+    wire [NUM_BANKS*WORD_SIZE-1:0] requant_data_out;
+
     requantization_block #(
         .R(R),
         .C(C),
@@ -369,8 +414,10 @@ module c_engine_controller #(
         .direct_in_sel(active_mode == 2'b10),
         .direct_in_8bit(mem_dout_b),
         .data_in(engdata_out),
-        .data_out(mem_din_a)
+        .data_out(requant_data_out)
     );
+
+    assign mem_din_a = (state == S_POOL_WB || (state == S_POOL_READ && gap_ch_idx == active_chin - 1)) ? gap_row_buf : requant_data_out;
 
     integer idx;
 
@@ -385,8 +432,8 @@ module c_engine_controller #(
             pc                   <= {CFG_ADDR_WIDTH{1'b0}};
             cfg_rd_addr          <= {CFG_ADDR_WIDTH{1'b0}};
             dec_mode             <= 2'b00;
-            dec_chin             <= 8'd0;
-            dec_chout            <= 8'd0;
+            dec_chin             <= 12'd0;
+            dec_chout            <= 12'd0;
             dec_kw               <= 4'd0;
             dec_kh               <= 4'd0;
             dec_shift_bits       <= 5'd0;
@@ -465,6 +512,10 @@ module c_engine_controller #(
                     tile_ic_cnt        <= 8'd0;
                     tile_oc_cnt        <= 8'd0;
                     stage0_total_wt_bytes <= 32'd0;
+                    gap_ch_idx         <= 8'd0;
+                    gap_executed       <= 1'b0;
+                    last_conv_out_addr <= {ADDR_WIDTH{1'b0}};
+                    gap_row_buf        <= {(NUM_BANKS*WORD_SIZE){1'b0}};
                     mem_we_a           <= {NUM_BANKS{1'b0}};
                     mem_en_a           <= 1'b0;
                     mem_en_b           <= 1'b0;
@@ -477,6 +528,10 @@ module c_engine_controller #(
 
                     if (start) begin
                         busy                  <= 1'b1;
+                        gap_ch_idx            <= 8'd0;
+                        gap_executed          <= 1'b0;
+                        last_conv_out_addr    <= {ADDR_WIDTH{1'b0}};
+                        gap_row_buf           <= {(NUM_BANKS*WORD_SIZE){1'b0}};
                         chunk_idx             <= 8'd0;
                         chunk_in_offset       <= {ADDR_WIDTH{1'b0}};
                         chunk_out_offset      <= {ADDR_WIDTH{1'b0}};
@@ -520,27 +575,30 @@ module c_engine_controller #(
                 // -------------------------------------------------------------
                 S_FETCH_CFG: begin
                     dec_mode               <= cfg_rd_data[1:0];
-                    dec_chin               <= cfg_rd_data[9:2];
-                    dec_chout              <= cfg_rd_data[17:10];
-                    dec_kw                 <= cfg_rd_data[21:18];
-                    dec_kh                 <= cfg_rd_data[25:22];
-                    dec_shift_bits         <= cfg_rd_data[30:26];
-                    dec_pad_type           <= cfg_rd_data[31];
-                    dec_input_base_addr    <= cfg_rd_data[45:32];
-                    dec_weight_base_addr   <= cfg_rd_data[59:46];
-                    dec_act_type           <= cfg_rd_data[61:60];
-                    dec_stride             <= (cfg_rd_data[63:62] == 2'd0) ? 3'd1 : {1'b0, cfg_rd_data[63:62]};
-                    dec_output_base_addr   <= cfg_rd_data[77:64];
-                    dec_residual_base_addr <= cfg_rd_data[91:78];
-                    dec_residual_en        <= cfg_rd_data[92];
-                    dec_dma_rd_en          <= cfg_rd_data[93];
-                    dec_dma_wr_en          <= cfg_rd_data[94];
-                    dec_is_last            <= cfg_rd_data[95];
-                    dec_pool_type          <= cfg_rd_data[97:96];
-                    dec_pool_size          <= cfg_rd_data[99:98];
-                    dec_pool_stride        <= (cfg_rd_data[101:100] == 2'd0) ? 3'd2 : {1'b0, cfg_rd_data[101:100]};
-                    dec_num_chunks         <= (cfg_rd_data[109:102] == 8'd0) ? 8'd1 : cfg_rd_data[109:102];
-                    dec_dma_beats          <= cfg_rd_data[116:110];
+                    dec_chin               <= cfg_rd_data[13:2];
+                    dec_chout              <= cfg_rd_data[25:14];
+                    dec_kw                 <= cfg_rd_data[29:26];
+                    dec_stride             <= (cfg_rd_data[31:30] == 2'd0) ? 3'd1 : {1'b0, cfg_rd_data[31:30]};
+
+                    dec_kh                 <= cfg_rd_data[35:32];
+                    dec_shift_bits         <= cfg_rd_data[40:36];
+                    dec_act_type           <= cfg_rd_data[42:41];
+                    dec_pad_type           <= cfg_rd_data[43];
+                    dec_pool_type          <= cfg_rd_data[45:44];
+                    dec_pool_size          <= cfg_rd_data[47:46];
+                    dec_pool_stride        <= (cfg_rd_data[49:48] == 2'd0) ? 3'd2 : {1'b0, cfg_rd_data[49:48]};
+                    dec_residual_en        <= cfg_rd_data[50];
+                    dec_dma_rd_en          <= cfg_rd_data[51];
+                    dec_dma_wr_en          <= cfg_rd_data[52];
+                    dec_is_last            <= cfg_rd_data[53];
+                    dec_dma_beats          <= cfg_rd_data[60:54];
+
+                    dec_input_base_addr    <= cfg_rd_data[77:64];
+                    dec_weight_base_addr   <= cfg_rd_data[91:78];
+                    dec_num_chunks         <= (cfg_rd_data[99:92] == 8'd0) ? 8'd1 : cfg_rd_data[99:92];
+
+                    dec_output_base_addr   <= cfg_rd_data[113:100];
+                    dec_residual_base_addr <= cfg_rd_data[127:114];
 
                     oc_cnt                 <= 8'd0;
                     ch_cnt                 <= 8'd0;
@@ -586,22 +644,32 @@ module c_engine_controller #(
                             mem_en_a     <= 1'b1;
                             state        <= S_LOAD_WEIGHTS;
                         end else if (active_mode == 2'b01) begin
-                            // Mode 1: GEMV -> Start 1-cycle BRAM wait
-                            pe_enable  <= 1'b1;
-                            mem_addr_a <= active_weight_base_addr;
-                            mem_en_a   <= 1'b1;
-                            mem_addr_b <= eff_input_base_addr;
-                            mem_en_b   <= 1'b1;
-                            sel0       <= 1'b0;
-                            sel1       <= 2'b00;
-                            eng_enable <= 1'b0;
-                            reg_enable <= 1'b0;
-                            state      <= S_GEMV_WAIT;
+                            // Mode 1: GEMV -> Check if Hardware GAP is needed before first GEMV uop (multi-chunk models only)
+                            if (active_num_chunks > 8'd1 && !gap_executed && (last_conv_out_addr != {ADDR_WIDTH{1'b0}})) begin
+                                gap_ch_idx  <= 8'd0;
+                                gap_row_buf <= {(NUM_BANKS*WORD_SIZE){1'b0}};
+                                mem_addr_b  <= last_conv_out_addr;
+                                mem_en_b    <= 1'b1;
+                                state       <= S_POOL_WAIT;
+                            end else begin
+                                pe_enable  <= 1'b1;
+                                mem_addr_a <= active_weight_base_addr;
+                                mem_en_a   <= 1'b1;
+                                mem_addr_b <= eff_input_base_addr;
+                                mem_en_b   <= 1'b1;
+                                sel0       <= 1'b0;
+                                sel1       <= 2'b00;
+                                eng_enable <= 1'b0;
+                                reg_enable <= 1'b0;
+                                state      <= S_GEMV_WAIT;
+                            end
                         end else if (active_mode == 2'b10) begin
-                            // Mode 2: Standalone Streaming 2D Pooling
-                            mem_addr_b <= eff_input_base_addr;
-                            mem_en_b   <= 1'b1;
-                            state      <= S_POOL_WAIT;
+                            // Mode 2: Standalone Global Average Pooling
+                            gap_ch_idx  <= 8'd0;
+                            gap_row_buf <= {(NUM_BANKS*WORD_SIZE){1'b0}};
+                            mem_addr_b  <= eff_input_base_addr;
+                            mem_en_b    <= 1'b1;
+                            state       <= S_POOL_WAIT;
                         end else begin
                             state      <= S_DONE;
                         end
@@ -959,8 +1027,8 @@ module c_engine_controller #(
                         if (chunk_idx < active_num_chunks - 8'd1) begin
                             // Advance to next spatial chunk of current layer using same resident weights
                             chunk_idx        <= chunk_idx + 8'd1;
-                            chunk_in_offset  <= chunk_in_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chin };
-                            chunk_out_offset <= chunk_out_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chout };
+                            chunk_in_offset  <= chunk_in_offset + { {(ADDR_WIDTH-12){1'b0}}, active_chin };
+                            chunk_out_offset <= chunk_out_offset + { {(ADDR_WIDTH-12){1'b0}}, active_chout };
                             oc_base_addr     <= 32'd0;
                             ch_base_addr     <= 32'd0;
                             v_base_addr      <= 32'd0;
@@ -1000,6 +1068,7 @@ module c_engine_controller #(
                                 tile_ic_cnt     <= 8'd0;
                                 tile_oc_cnt     <= 8'd0;
                                 stage_wt_loaded <= 1'b0;
+                                last_conv_out_addr <= active_output_base_addr;
                                 if (dec_dma_wr_en) begin
                                     ctrl_start_wr_dma <= 1'b1;
                                     ctrl_wr_sram_row  <= active_output_base_addr;
@@ -1092,12 +1161,12 @@ module c_engine_controller #(
                     mem_en_b   <= 1'b0;
                     if (chunk_idx < active_num_chunks - 8'd1) begin
                         chunk_idx        <= chunk_idx + 8'd1;
-                        chunk_in_offset  <= chunk_in_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chin };
-                        chunk_out_offset <= chunk_out_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chout };
+                        chunk_in_offset  <= chunk_in_offset + { {(ADDR_WIDTH-12){1'b0}}, active_chin };
+                        chunk_out_offset <= chunk_out_offset + { {(ADDR_WIDTH-12){1'b0}}, active_chout };
                         pe_enable        <= 1'b1;
                         mem_addr_a       <= active_weight_base_addr;
                         mem_en_a         <= 1'b1;
-                        mem_addr_b       <= active_input_base_addr + chunk_in_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chin };
+                        mem_addr_b       <= active_input_base_addr + chunk_in_offset + { {(ADDR_WIDTH-12){1'b0}}, active_chin };
                         mem_en_b         <= 1'b1;
                         sel0             <= 1'b0;
                         sel1             <= 2'b00;
@@ -1140,54 +1209,57 @@ module c_engine_controller #(
                 end
 
                 // -------------------------------------------------------------
-                // Mode 2: Standalone Streaming 2D Pooling
+                // Mode 2 / Auto-GAP: Hardware Global Average Pooling Engine
                 // -------------------------------------------------------------
                 S_POOL_WAIT: begin
                     state <= S_POOL_READ;
                 end
 
                 S_POOL_READ: begin
-                    mem_addr_a <= eff_output_base_addr + ch_cnt;
-                    mem_en_a   <= 1'b1;
-                    mem_we_a   <= {NUM_BANKS{1'b1}};
-                    state      <= S_POOL_WB;
-                end
+                    if (w_DATA_WIDTH == 16)
+                        gap_row_buf[gap_ch_idx*16 +: 16] <= spatial_mean;
+                    else
+                        gap_row_buf[gap_ch_idx*8 +: 8] <= spatial_mean;
 
-                S_POOL_WB: begin
-                    mem_we_a <= {NUM_BANKS{1'b0}};
-                    mem_en_a <= 1'b0;
-                    if (ch_cnt < active_chin - 1) begin
-                        ch_cnt     <= ch_cnt + 8'd1;
-                        mem_addr_b <= eff_input_base_addr + (ch_cnt + 8'd1);
+                    if (gap_ch_idx < active_chin - 1) begin
+                        gap_ch_idx <= gap_ch_idx + 8'd1;
+                        mem_addr_b <= ((active_mode == 2'b10) ? active_input_base_addr : last_conv_out_addr) + (gap_ch_idx + 8'd1);
                         mem_en_b   <= 1'b1;
                         state      <= S_POOL_WAIT;
                     end else begin
-                        if (chunk_idx < active_num_chunks - 8'd1) begin
-                            chunk_idx        <= chunk_idx + 8'd1;
-                            chunk_in_offset  <= chunk_in_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chin };
-                            chunk_out_offset <= chunk_out_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chout };
-                            ch_cnt           <= 8'd0;
-                            mem_addr_b       <= active_input_base_addr + chunk_in_offset + { {(ADDR_WIDTH-8){1'b0}}, active_chin };
-                            mem_en_b         <= 1'b1;
-                            state            <= S_POOL_WAIT;
+                        mem_en_b   <= 1'b0;
+                        mem_addr_a <= active_input_base_addr;
+                        mem_en_a   <= 1'b1;
+                        mem_we_a   <= {NUM_BANKS{1'b1}};
+                        state      <= S_POOL_WB;
+                    end
+                end
+
+                S_POOL_WB: begin
+                    mem_en_a     <= 1'b0;
+                    mem_we_a     <= {NUM_BANKS{1'b0}};
+                    gap_executed <= 1'b1;
+
+                    if (active_mode == 2'b10) begin
+                        if (cfg_mode_select == 1'b1 && !active_is_last) begin
+                            pc              <= pc + { {(CFG_ADDR_WIDTH-1){1'b0}}, 1'b1 };
+                            cfg_rd_addr     <= pc + { {(CFG_ADDR_WIDTH-1){1'b0}}, 1'b1 };
+                            stage_wt_loaded <= 1'b0;
+                            state           <= S_FETCH_CFG;
                         end else begin
-                            chunk_idx        <= 8'd0;
-                            chunk_in_offset  <= {ADDR_WIDTH{1'b0}};
-                            chunk_out_offset <= {ADDR_WIDTH{1'b0}};
-                            if (dec_dma_wr_en) begin
-                                ctrl_start_wr_dma <= 1'b1;
-                                ctrl_wr_sram_row  <= active_output_base_addr;
-                                ctrl_wr_beats     <= (dec_dma_beats == 7'd0) ? 16'd16 : {9'd0, dec_dma_beats};
-                                state             <= S_DMA_WR_WAIT;
-                            end else if ((cfg_mode_select == 1'b1) && !active_is_last) begin
-                                pc              <= pc + { {(CFG_ADDR_WIDTH-1){1'b0}}, 1'b1 };
-                                cfg_rd_addr     <= pc + { {(CFG_ADDR_WIDTH-1){1'b0}}, 1'b1 };
-                                stage_wt_loaded <= 1'b0;
-                                state           <= S_FETCH_CFG;
-                            end else begin
-                                state <= S_DONE;
-                            end
+                            state <= S_DONE;
                         end
+                    end else begin
+                        pe_enable  <= 1'b1;
+                        mem_addr_a <= active_weight_base_addr;
+                        mem_en_a   <= 1'b1;
+                        mem_addr_b <= active_input_base_addr;
+                        mem_en_b   <= 1'b1;
+                        sel0       <= 1'b0;
+                        sel1       <= 2'b00;
+                        eng_enable <= 1'b0;
+                        reg_enable <= 1'b0;
+                        state      <= S_GEMV_WAIT;
                     end
                 end
 

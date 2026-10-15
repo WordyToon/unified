@@ -19,7 +19,7 @@ Targeting the **AMD Zynq UltraScale+ ZCU106 Evaluation Kit** (`xczu7ev-ffvc1156-
   - **8-Bit (INT8)**: Uses all **96 UltraRAM288 blocks** (100.0% utilization) on the XCZU7EV chip, scaling on-chip SRAM to **3.93 MB** (15,360 rows $\times$ 256 B/row) for 100% on-chip intermediate activations (zero DRAM activation spilling).
   - **16-Bit (INT16)**: Uses **64 UltraRAM288 blocks** (66.7% utilization) providing **2.10 MB** (4,096 rows $\times$ 512 B/row) with zero BRAM spilling and over $2\times$ headroom for all models.
 - **Dual Precision with Full Physical Timing Closure**:
-  - **8-Bit Mode @ 75.0 MHz**: Worst Negative Slack $WNS = \mathbf{+0.281\text{ ns}}$ (Timing Closed, Met).
+  - **8-Bit Mode @ 75.0 MHz**: Worst Negative Slack $WNS = \mathbf{+0.595\text{ ns}}$ (Timing Closed, Met).
   - **16-Bit Mode @ 70.0 MHz**: Worst Negative Slack $WNS = \mathbf{+0.079\text{ ns}}$ (Timing Closed, Met).
 
 ---
@@ -236,6 +236,16 @@ unified/
 │   ├── run_resnet50.ps1         # Run ResNet-50 inference
 │   ├── run_mobilenetv2.ps1      # Run MobileNetV2 inference
 │   └── run_efficientnetb0.ps1   # Run EfficientNet-B0 inference
+├── doc/                         # Technical reports, recovery plans, and walkthroughs
+│   ├── PROJECT_REPORT_V3.md       # (Latest) Comprehensive engineering report (Calibration, URAM, XSim, ZCU106)
+│   ├── IMPLEMENTATION_PLAN_V3.md  # (Latest) Solution 1 calibration & feature alignment plan
+│   ├── IMPLEMENTATION_WALKTHROUGH_V3.md # (Latest) Step-by-step walkthrough & UART/XSim logs
+│   ├── FINAL_PROJECT_REPORT_V2.md # Comprehensive engineering report (Architecture, ISA, Vivado, Benchmarks)
+│   ├── IMPLEMENTATION_PLAN_V2.md  # Hardware execution recovery plan & root cause analysis
+│   ├── IMPLEMENTATION_WALKTHROUGH_V2.md # End-to-end walkthrough (RTL diffs, XSim traces, ELF compilation)
+│   ├── PROJECT_REPORT_V1.md       # Original architecture report v1
+│   ├── IMPLEMENTATION_PLAN_V1.md  # Original implementation plan v1
+│   └── IMPLEMENTATION_WALKTHROUGH_V1.md # Original walkthrough v1
 ├── fpga/                        # Vivado synthesis, block design, and bitstreams
 │   ├── export/                  # Exported bitstreams (.bit) and platforms (.xsa)
 │   │   ├── 8bit/                # 8-bit bitstream, XSA, utilization & timing reports

@@ -5,11 +5,11 @@
 
 task automatic load_mnist_microcode;
 begin
-    u_dut.u_engine.u_config_mem.mem[0] = 128'h000000650000000f50028000a4cc1004;
-    u_dut.u_engine.u_config_mem.mem[1] = 128'h00000060000000235005000f9ccc0410;
-    u_dut.u_engine.u_config_mem.mem[2] = 128'h0000006000000069500a0023a0448101;
-    u_dut.u_engine.u_config_mem.mem[3] = 128'h0000006000000091501b80699c444081;
-    u_dut.u_engine.u_config_mem.mem[4] = 128'h00010060c00000aa40258091a0442841;
+    u_dut.u_engine.u_config_mem.mem[0] = 128'h000000f01002800000025a934c010004;
+    u_dut.u_engine.u_config_mem.mem[1] = 128'h000002301005000f00020a734c004010;
+    u_dut.u_engine.u_config_mem.mem[2] = 128'h00000690100a002300020a8144080101;
+    u_dut.u_engine.u_config_mem.mem[3] = 128'h00000910101b806900020a7144040081;
+    u_dut.u_engine.u_config_mem.mem[4] = 128'h00000aa0102580910132088144028041;
 end
 endtask
 

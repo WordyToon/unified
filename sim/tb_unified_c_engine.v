@@ -30,10 +30,10 @@ module tb_unified_c_engine;
     parameter C_M_AXI_ADDR_WIDTH  = 32;
     parameter C_M_AXI_DATA_WIDTH  = 128;
 
-    // Clock and Reset (100 MHz -> 10 ns period: #5 clk = ~clk)
+    // Clock and Reset (75.0 MHz -> 13.333 ns period: #6.666 clk = ~clk)
     reg clk;
     reg resetn;
-    always #5 clk = ~clk;
+    always #6.666 clk = ~clk;
 
     // AXI4-Lite Slave Interface
     reg  [7:0]  s_axi_lite_awaddr;
@@ -333,7 +333,7 @@ module tb_unified_c_engine;
             axi_lite_write(8'h14, 32'h00000000); // SRAM Row 0
             axi_lite_write(8'h18, 32'h00000040); // 64 beats (1024 bytes)
         `else
-            axi_lite_write(8'h14, 32'd1400);      // SRAM Row 1400 (ImageNet Input Features)
+            axi_lite_write(8'h14, 32'd2100);      // SRAM Row 2100 (ImageNet Input Features)
             axi_lite_write(8'h18, 32'd960);       // 60 rows * 16 beats = 960 beats (ImageNet feature tensor)
         `endif
         axi_lite_write(8'h00, 32'h00000001); // start_rd_dma = 1
@@ -347,7 +347,7 @@ module tb_unified_c_engine;
         `ifdef SIM_MNIST
             $display("      DEBUG: SRAM Row 0 Bank 0: %032X", u_dut.u_engine.u_memory.gen_banks[0].mem[0]);
         `else
-            $display("      DEBUG: SRAM Row 1400 Bank 0: %032X", u_dut.u_engine.u_memory.gen_banks[0].mem[1400]);
+            $display("      DEBUG: SRAM Row 2100 Bank 0: %032X", u_dut.u_engine.u_memory.gen_banks[0].mem[2100]);
         `endif
 
         // 4. Trigger Autonomous Systolic Compute Engine

@@ -33,15 +33,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import UserModel, hw_config
 
 # ==============================================================================
-# SRAM Memory Geometry & Allocation (2,048 Rows)
+# SRAM Memory Geometry & Allocation (15,360 Rows on AMD ZCU106 UltraRAM)
 # ==============================================================================
-SRAM_INPUT_ROW      = 0     # Rows 0..587:   Input activation chunks
-SRAM_STAGE0_OUT_ROW = 600   # Rows 600..1383: Stage 0 full output tensor
-SRAM_INTERM_ROW     = 1400  # Rows 1400..1655: Intermediate feature maps (Ping buffer)
-SRAM_BUNDLE2_ROW    = 1660  # Rows 1660..1915: Intermediate feature maps (Pong buffer)
-SRAM_WEIGHTS_ROW    = 1920  # Rows 1920..1979: Active stage weights staging area
-SRAM_SKIP_ROW       = 1980  # Rows 1980..1999: Residual skip branch buffer
-SRAM_LOGITS_ROW     = 2000  # Rows 2000..2003: 1,000-class output logits (4 rows)
+SRAM_INPUT_ROW      = 0      # Rows 0..587:   Input activation chunks (196 chunks x 3)
+SRAM_STAGE0_OUT_ROW = 600    # Rows 600..1999: Stage 0 full output tensor (up to 1,400 rows)
+SRAM_LOGITS_ROW     = 2000   # Rows 2000..2003: 1,000-class output logits (4 rows, matches RTL writeback)
+SRAM_INTERM_ROW     = 2100   # Rows 2100..5999: Intermediate feature maps (Ping buffer, 3,900 rows)
+SRAM_BUNDLE2_ROW    = 6000   # Rows 6000..9999: Intermediate feature maps (Pong buffer, 4,000 rows)
+SRAM_SKIP_ROW       = 10000  # Rows 10000..13999: Residual skip branch buffer (4,000 rows)
+SRAM_WEIGHTS_ROW    = 14000  # Rows 14000..15359: Active stage weights staging area (1,360 rows)
 
 
 def pack_config_word(mode, chin, chout, kw, kh, shift_bits, in_base, wt_base, out_base, is_last,
@@ -50,35 +50,35 @@ def pack_config_word(mode, chin, chout, kw, kh, shift_bits, in_base, wt_base, ou
                      dma_rd_en=0, dma_wr_en=0, dma_beats=0, num_chunks=1):
     """Packs layer parameters into a 128-bit Config Word matching RTL config_mem."""
     word = 0
-    # Word 0 [31:0]
-    word |= (int(mode) & 0x3) << 0
-    word |= (int(chin) & 0xFF) << 2
-    word |= (int(chout) & 0xFF) << 10
-    word |= (int(kw) & 0xF) << 18
-    word |= (int(kh) & 0xF) << 22
-    word |= (int(shift_bits) & 0x1F) << 26
-    word |= (int(pad_type) & 0x1) << 31
+    # Dword 0 [31:0]
+    word |= (int(mode) & 0x3) << 0           # [1:0]   2 bits
+    word |= (int(chin) & 0xFFF) << 2         # [13:2]  12 bits (0..4095)
+    word |= (int(chout) & 0xFFF) << 14       # [25:14] 12 bits (0..4095)
+    word |= (int(kw) & 0xF) << 26            # [29:26] 4 bits
+    word |= (int(stride) & 0x3) << 30        # [31:30] 2 bits
 
-    # Word 1 [63:32]
-    word |= (int(in_base) & 0x3FFF) << 32
-    word |= (int(wt_base) & 0x3FFF) << 46
-    word |= (int(act_type) & 0x3) << 60
-    word |= (int(stride) & 0x3) << 62
+    # Dword 1 [63:32]
+    word |= (int(kh) & 0xF) << 32            # [35:32] 4 bits
+    word |= (int(shift_bits) & 0x1F) << 36   # [40:36] 5 bits
+    word |= (int(act_type) & 0x3) << 41      # [42:41] 2 bits
+    word |= (int(pad_type) & 0x1) << 43      # [43]    1 bit
+    word |= (int(pool_type) & 0x3) << 44     # [45:44] 2 bits
+    word |= (int(pool_size) & 0x3) << 46     # [47:46] 2 bits
+    word |= (int(pool_stride) & 0x3) << 48   # [49:48] 2 bits
+    word |= (int(residual_en) & 0x1) << 50   # [50]    1 bit
+    word |= (int(dma_rd_en) & 0x1) << 51     # [51]    1 bit
+    word |= (int(dma_wr_en) & 0x1) << 52     # [52]    1 bit
+    word |= (int(is_last) & 0x1) << 53       # [53]    1 bit
+    word |= (int(dma_beats) & 0x7F) << 54    # [60:54] 7 bits
 
-    # Word 2 [95:64]
-    word |= (int(out_base) & 0x3FFF) << 64
-    word |= (int(residual_base_addr) & 0x3FFF) << 78
-    word |= (int(residual_en) & 0x1) << 92
-    word |= (int(dma_rd_en) & 0x1) << 93
-    word |= (int(dma_wr_en) & 0x1) << 94
-    word |= (int(is_last) & 0x1) << 95
+    # Dword 2 [95:64]
+    word |= (int(in_base) & 0x3FFF) << 64    # [77:64] 14 bits (SRAM row 0..16383)
+    word |= (int(wt_base) & 0x3FFF) << 78    # [91:78] 14 bits (SRAM row 0..16383)
+    word |= (int(num_chunks) & 0xFF) << 92   # [99:92] 8 bits (1..255)
 
-    # Word 3 [127:96]
-    word |= (int(pool_type) & 0x3) << 96
-    word |= (int(pool_size) & 0x3) << 98
-    word |= (int(pool_stride) & 0x3) << 100
-    word |= (int(num_chunks) & 0xFF) << 102
-    word |= (int(dma_beats) & 0x7F) << 110
+    # Dword 3 [127:96]
+    word |= (int(out_base) & 0x3FFF) << 100  # [113:100] 14 bits (SRAM row 0..16383)
+    word |= (int(residual_base_addr) & 0x3FFF) << 114 # [127:114] 14 bits (SRAM row 0..16383)
 
     return word
 
@@ -123,9 +123,15 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
       - 53 Convolutional Layers (Conv1 + 16 Bottleneck blocks)
       - 4 GEMV sub-stages (1,000 ImageNet categories)
     """
-    shift_conv0 = 14 if precision_bits == 16 else 7
-    shift_conv  = 15 if precision_bits == 16 else 8
-    shift_gemv  = 15 if precision_bits == 16 else 8
+    calib_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calib_shifts.json")
+    calib_map = {}
+    if os.path.exists(calib_file):
+        with open(calib_file, "r") as f:
+            cdata = json.load(f)
+            for item in cdata:
+                calib_map[item["stage"]] = item["shift"]
+
+    shift_conv0 = calib_map.get(0, 14 if precision_bits == 16 else 7)
 
     stages = []
 
@@ -149,6 +155,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
         for b_idx, block in enumerate(layer_mod):
             # Downsample branch if present
             if block.downsample is not None:
+                shift_ds = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
                 stages.append({
                     "stage_id": stage_cnt,
                     "name": f"Stage {stage_cnt}: {layer_name}.{b_idx}.downsample.0 (1x1)",
@@ -157,7 +164,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                     "chin": block.downsample[0].in_channels,
                     "chout": block.downsample[0].out_channels,
                     "kw": 1, "kh": 1, "stride": block.downsample[0].stride[0],
-                    "pool": 0, "residual": 0, "shift": shift_conv,
+                    "pool": 0, "residual": 0, "shift": shift_ds,
                     "in_base": prev_out,
                     "out_base": SRAM_SKIP_ROW
                 })
@@ -169,6 +176,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             # Bottleneck conv1 (1x1)
             conv1_out = ping_pong[cur_buf]
             cur_buf = 1 - cur_buf
+            shift_c1 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
                 "name": f"Stage {stage_cnt}: {layer_name}.{b_idx}.conv1 (1x1)",
@@ -177,7 +185,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "chin": block.conv1.in_channels,
                 "chout": block.conv1.out_channels,
                 "kw": 1, "kh": 1, "stride": block.conv1.stride[0],
-                "pool": 0, "residual": 0, "shift": shift_conv,
+                "pool": 0, "residual": 0, "shift": shift_c1,
                 "in_base": prev_out,
                 "out_base": conv1_out
             })
@@ -186,6 +194,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             # Bottleneck conv2 (3x3)
             conv2_out = ping_pong[cur_buf]
             cur_buf = 1 - cur_buf
+            shift_c2 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
                 "name": f"Stage {stage_cnt}: {layer_name}.{b_idx}.conv2 (3x3)",
@@ -194,7 +203,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "chin": block.conv2.in_channels,
                 "chout": block.conv2.out_channels,
                 "kw": 3, "kh": 3, "stride": block.conv2.stride[0],
-                "pool": 0, "residual": 0, "shift": shift_conv,
+                "pool": 0, "residual": 0, "shift": shift_c2,
                 "in_base": conv1_out,
                 "out_base": conv2_out
             })
@@ -203,6 +212,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             # Bottleneck conv3 (1x1) + Residual Skip
             conv3_out = ping_pong[cur_buf]
             cur_buf = 1 - cur_buf
+            shift_c3 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
                 "name": f"Stage {stage_cnt}: {layer_name}.{b_idx}.conv3 (1x1) + Skip",
@@ -211,7 +221,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "chin": block.conv3.in_channels,
                 "chout": block.conv3.out_channels,
                 "kw": 1, "kh": 1, "stride": block.conv3.stride[0],
-                "pool": 0, "residual": 1, "residual_base_addr": skip_row, "shift": shift_conv,
+                "pool": 0, "residual": 1, "residual_base_addr": skip_row, "shift": shift_c3,
                 "in_base": conv2_out,
                 "out_base": conv3_out
             })
@@ -220,6 +230,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
 
     # 4 GEMV sub-stages (Stages 53..56)
     for p in range(4):
+        shift_gemv = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 8)
         stages.append({
             "stage_id": stage_cnt,
             "name": f"Stage {stage_cnt}: GEMV Head Classes {p*256}..{min(999, (p+1)*256 - 1)}",
@@ -297,7 +308,7 @@ def compile_resnet50_full(precision="8bit"):
         dma_beats = 16 if is_last else 0
 
         w = pack_config_word(
-            mode=mode, chin=min(255, s["chin"]), chout=min(255, s["chout"]),
+            mode=mode, chin=s["chin"], chout=s["chout"],
             kw=s["kw"], kh=s["kh"], shift_bits=shift_bits,
             in_base=s["in_base"], wt_base=SRAM_WEIGHTS_ROW, out_base=s["out_base"],
             is_last=1 if is_last else 0,

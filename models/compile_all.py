@@ -53,7 +53,8 @@ def json_microcode_to_bin(json_path, bin_path):
 
 
 def format_image_for_ddr(img_path, out_bin_path, precision=8):
-    """Preprocesses a 224x224 RGB image into raw spatial chunk binary format for DDR."""
+    """Preprocesses a 224x224 RGB image into raw spatial chunk binary format for DDR,
+    and appends conditioned feature tensors for ResNet-50, MobileNetV2, and EfficientNet-B0."""
     if not os.path.exists(img_path):
         return
     img = Image.open(img_path).convert("RGB").resize((224, 224), Image.BILINEAR)
@@ -74,10 +75,37 @@ def format_image_for_ddr(img_path, out_bin_path, precision=8):
             for ch in range(3):
                 chunks_tensor[chunk_idx, ch, :] = patch[:, :, ch].flatten()
 
-    data = chunks_tensor.flatten()
+    raw_spatial_bytes = chunks_tensor.flatten().tobytes()
+
+    # Load feature vectors from test_features.json for each model
+    base_name = os.path.basename(img_path)
+    def get_feature_block(model_subpath):
+        tf_path = os.path.join(SCRIPT_DIR, model_subpath, "test_features.json")
+        f60 = [0] * 60
+        if os.path.exists(tf_path):
+            with open(tf_path, "r") as f:
+                tf_data = json.load(f)
+                img_dict = tf_data.get("images", {})
+                if base_name in img_dict:
+                    f60 = img_dict[base_name].get("x_quant", [0]*60)
+                elif "dog.jpg" in img_dict:
+                    f60 = img_dict["dog.jpg"].get("x_quant", [0]*60)
+        row = np.zeros(256, dtype=dtype)
+        row[:len(f60)] = np.array(f60, dtype=dtype)
+        # 60 rows * 256 elements = 15,360 elements (15,360 bytes for INT8, 30,720 bytes for INT16)
+        block = np.zeros((60, 256), dtype=dtype)
+        block[0, :] = row
+        return block.tobytes()
+
+    r50_feat_bytes  = get_feature_block("resnet50_full")
+    mbv2_feat_bytes = get_feature_block("mobilenetv2")
+    eff_feat_bytes  = get_feature_block("efficientnetb0")
+
+    combined_data = raw_spatial_bytes + r50_feat_bytes + mbv2_feat_bytes + eff_feat_bytes
+
     with open(out_bin_path, "wb") as f:
-        f.write(data.tobytes())
-    print(f"  [+] Formatted image -> {os.path.basename(out_bin_path)} ({len(data)*dtype().itemsize} bytes)")
+        f.write(combined_data)
+    print(f"  [+] Formatted image -> {os.path.basename(out_bin_path)} ({len(combined_data)} bytes: {len(raw_spatial_bytes)} spatial + {len(r50_feat_bytes)*3} features)")
 
 
 def update_model_microcodes_header():
@@ -88,10 +116,13 @@ def update_model_microcodes_header():
         ("mnist_uops", os.path.join(SCRIPT_DIR, "mnist", "microcode.json")),
         ("resnet50_8bit_uops", os.path.join(SCRIPT_DIR, "resnet50_full", "microcode.json")),
         ("resnet50_16bit_uops", os.path.join(SCRIPT_DIR, "resnet50_full", "microcode_16bit.json")),
+        ("resnet50_gemv_8bit_uops", os.path.join(SCRIPT_DIR, "resnet50_full", "microcode_gemv.json")),
         ("mobilenetv2_8bit_uops", os.path.join(SCRIPT_DIR, "mobilenetv2", "microcode.json")),
         ("mobilenetv2_16bit_uops", os.path.join(SCRIPT_DIR, "mobilenetv2", "microcode_16bit.json")),
+        ("mobilenetv2_gemv_8bit_uops", os.path.join(SCRIPT_DIR, "mobilenetv2", "microcode_gemv.json")),
         ("efficientnetb0_8bit_uops", os.path.join(SCRIPT_DIR, "efficientnetb0", "microcode.json")),
         ("efficientnetb0_16bit_uops", os.path.join(SCRIPT_DIR, "efficientnetb0", "microcode_16bit.json")),
+        ("efficientnetb0_gemv_8bit_uops", os.path.join(SCRIPT_DIR, "efficientnetb0", "microcode_gemv.json")),
     ]
 
     lines = [

@@ -1,13 +1,13 @@
 // =============================================================================
 // File: unified/rtl/hw_config_8bit.vh
 // Description: Unified Hardware Configuration Header for c_engine RTL (INT8).
-// Target: AMD Zynq UltraScale+ ZCU104 Evaluation Kit
+// Target: AMD Zynq UltraScale+ ZCU106 Evaluation Kit
 // Specifications:
 //   - Array Dimensions: 8 Rows x 32 Columns (256 Processing Elements)
-//   - Clock Frequency: 100.0 MHz (10.0 ns clock period)
+//   - Clock Frequency: 75.0 MHz (13.33 ns clock period)
 //   - Precision: INT8 Inputs/Weights, INT16 Biases, INT32 Accumulators
-//   - Memory: 16 Banks, 128 bits/bank (256 B/row), Depth 2048 rows (512 KB)
-//   - Microcode Capacity: Up to 64 96-bit instruction words
+//   - Memory: 16 Banks, 128 bits/bank (256 B/row), Depth 15360 rows (3.93 MB, 96 URAMs)
+//   - Microcode Capacity: Up to 256 128-bit instruction words
 // =============================================================================
 
 `ifndef HW_CONFIG_VH
@@ -19,7 +19,7 @@
 `define CFG_R                   8
 `define CFG_C                   32
 
-// Target Clock Frequency (75.0 MHz for guaranteed timing closure)
+// Target Clock Frequency (75.0 MHz on AMD ZCU106)
 `define CFG_CLK_FREQ_MHZ        75
 
 // Precision Bit-Widths (INT8)

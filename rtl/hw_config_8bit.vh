@@ -19,7 +19,7 @@
 `define CFG_R                   8
 `define CFG_C                   32
 
-// Target Clock Frequency (75.0 MHz for guaranteed timing closure)
+// Target Clock Frequency (75.0 MHz on AMD ZCU106)
 `define CFG_CLK_FREQ_MHZ        75
 
 // Precision Bit-Widths (INT8)

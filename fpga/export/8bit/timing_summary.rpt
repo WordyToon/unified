@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date              : Tue Oct 13 18:44:00 2026
+| Date              : Thu Oct 15 15:47:01 2026
 | Host              : ECHDL_7922_W2 running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -file E:/unified/fpga/export/8bit/timing_summary.rpt
 | Design            : zcu106_unified_bd_wrapper
@@ -45,7 +45,7 @@ Timing Summary Report
 Rule     Severity  Description                   Violations  
 -------  --------  ----------------------------  ----------  
 DPIR-2   Warning   Asynchronous driver check     43          
-LUTAR-1  Warning   LUT drives async reset alert  1           
+LUTAR-1  Warning   LUT drives async reset alert  28          
 
 Note: This report is based on the most recent report_methodology run and may not be up-to-date. Run report_methodology on the current design for the latest report.
 
@@ -144,7 +144,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-      0.281        0.000                      0               180254        0.012        0.000                      0               180254        5.167        0.000                       0                 56473  
+      0.595        0.000                      0               183539        0.007        0.000                      0               183539        5.167        0.000                       0                 58891  
 
 
 All user specified timing constraints are met.
@@ -167,7 +167,7 @@ clk_pl_0  {0.000 6.667}      13.334          74.996
 
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-clk_pl_0            0.281        0.000                      0               176468        0.012        0.000                      0               176468        5.167        0.000                       0                 56473  
+clk_pl_0            0.595        0.000                      0               179629        0.007        0.000                      0               179629        5.167        0.000                       0                 58891  
 
 
 ------------------------------------------------------------------------------------------------
@@ -186,7 +186,7 @@ From Clock    To Clock          WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS
 
 Path Group         From Clock         To Clock               WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints  
 ----------         ----------         --------               -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------  
-**async_default**  clk_pl_0           clk_pl_0                 8.974        0.000                      0                 3786        0.169        0.000                      0                 3786  
+**async_default**  clk_pl_0           clk_pl_0                 5.980        0.000                      0                 3910        0.264        0.000                      0                 3910  
 
 
 ------------------------------------------------------------------------------------------------
@@ -199,34 +199,34 @@ Path Group         From Clock         To Clock               WNS(ns)      TNS(ns
 From Clock:  clk_pl_0
   To Clock:  clk_pl_0
 
-Setup :            0  Failing Endpoints,  Worst Slack        0.281ns,  Total Violation        0.000ns
-Hold  :            0  Failing Endpoints,  Worst Slack        0.012ns,  Total Violation        0.000ns
+Setup :            0  Failing Endpoints,  Worst Slack        0.595ns,  Total Violation        0.000ns
+Hold  :            0  Failing Endpoints,  Worst Slack        0.007ns,  Total Violation        0.000ns
 PW    :            0  Failing Endpoints,  Worst Slack        5.167ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 
 
 Max Delay Paths
 --------------------------------------------------------------------------------------
-Slack (MET) :             0.281ns  (required time - arrival time)
-  Source:                 zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_30/CLKARDCLK
+Slack (MET) :             0.595ns  (required time - arrival time)
+  Source:                 zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_45/CLKARDCLK
                             (rising edge-triggered cell RAMB36E2 clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
-  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_C_DATA_INST/C[33]
+  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_C_DATA_INST/C[34]
                             (rising edge-triggered cell DSP_C_DATA clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
   Path Group:             clk_pl_0
   Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            13.334ns  (clk_pl_0 rise@13.334ns - clk_pl_0 rise@0.000ns)
-  Data Path Delay:        12.493ns  (logic 5.140ns (41.142%)  route 7.353ns (58.858%))
-  Logic Levels:           22  (DSP_A_B_DATA=1 DSP_ALU=2 DSP_M_DATA=1 DSP_MULTIPLIER=1 DSP_OUTPUT=2 DSP_PREADD_DATA=1 LUT3=1 LUT6=5 MUXF7=1 RAMB36E2=7)
-  Clock Path Skew:        -0.164ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    1.952ns = ( 15.286 - 13.334 ) 
-    Source Clock Delay      (SCD):    2.213ns
+  Data Path Delay:        11.886ns  (logic 5.037ns (42.377%)  route 6.849ns (57.623%))
+  Logic Levels:           21  (DSP_A_B_DATA=1 DSP_ALU=2 DSP_M_DATA=1 DSP_MULTIPLIER=1 DSP_OUTPUT=2 DSP_PREADD_DATA=1 LUT4=1 LUT6=4 MUXF7=1 RAMB36E2=7)
+  Clock Path Skew:        -0.465ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.811ns = ( 15.145 - 13.334 ) 
+    Source Clock Delay      (SCD):    2.373ns
     Clock Pessimism Removal (CPR):    0.097ns
   Clock Uncertainty:      0.141ns  ((TSJ^2 + DJ^2)^1/2) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Discrete Jitter          (DJ):    0.273ns
     Phase Error              (PE):    0.000ns
-  Clock Net Delay (Source):      2.005ns (routing 0.569ns, distribution 1.436ns)
-  Clock Net Delay (Destination): 1.784ns (routing 0.512ns, distribution 1.272ns)
+  Clock Net Delay (Source):      2.165ns (routing 0.569ns, distribution 1.596ns)
+  Clock Net Delay (Destination): 1.643ns (routing 0.512ns, distribution 1.131ns)
 
     Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
   -------------------------------------------------------------------    -------------------
@@ -236,79 +236,76 @@ Slack (MET) :             0.281ns  (required time - arrival time)
                          net (fo=1, routed)           0.180     0.180    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.028     0.208 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       2.005     2.213    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/aclk
-    RAMB36_X2Y6          RAMB36E2                                     r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_30/CLKARDCLK
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       2.165     2.373    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/aclk
+    RAMB36_X4Y13         RAMB36E2                                     r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_45/CLKARDCLK
   -------------------------------------------------------------------    -------------------
-    RAMB36_X2Y6          RAMB36E2 (Prop_RAMB36E2_RAMB36_CLKARDCLK_CASDOUTA[8])
-                                                      1.047     3.260 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_30/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     3.294    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_30_n_27
-    RAMB36_X2Y7          RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     3.504 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_31/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     3.538    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_31_n_27
-    RAMB36_X2Y8          RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     3.748 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_32/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     3.782    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_32_n_27
-    RAMB36_X2Y9          RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     3.992 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_33/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     4.026    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_33_n_27
-    RAMB36_X2Y10         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     4.236 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_34/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     4.270    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_34_n_27
-    RAMB36_X2Y11         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     4.480 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_35/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     4.514    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_35_n_27
-    RAMB36_X2Y12         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_CASDOUTA[8])
-                                                      0.210     4.724 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_36/CASDOUTA[8]
-                         net (fo=1, routed)           0.034     4.758    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_36_n_27
-    RAMB36_X2Y13         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[8]_DOUTADOUT[8])
-                                                      0.117     4.875 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_37/DOUTADOUT[8]
-                         net (fo=2, routed)           1.356     6.231    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[1].mem_reg_bram_37_n_91
-    SLICE_X86Y187        LUT3 (Prop_D6LUT_SLICEM_I2_O)
-                                                      0.099     6.330 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/data_out_reg[208]_i_5/O
-                         net (fo=4, routed)           0.688     7.018    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/buffer_pl_clk_0.PL_CLK_0_BUFG[78]
-    SLICE_X84Y234        LUT6 (Prop_C6LUT_SLICEM_I1_O)
-                                                      0.123     7.141 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_1176/O
-                         net (fo=1, routed)           0.653     7.794    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_1176_n_0
-    SLICE_X79Y279        LUT6 (Prop_A6LUT_SLICEM_I1_O)
-                                                      0.053     7.847 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_446/O
-                         net (fo=1, routed)           0.011     7.858    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_446_n_0
-    SLICE_X79Y279        MUXF7 (Prop_F7MUX_AB_SLICEM_I1_O)
-                                                      0.065     7.923 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_196/O
-                         net (fo=1, routed)           0.523     8.446    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_196_n_0
-    SLICE_X68Y269        LUT6 (Prop_G6LUT_SLICEL_I1_O)
-                                                      0.035     8.481 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_72/O
-                         net (fo=1, routed)           0.609     9.090    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_72_n_0
-    SLICE_X61Y269        LUT6 (Prop_C6LUT_SLICEM_I1_O)
-                                                      0.123     9.213 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_34/O
-                         net (fo=256, routed)         1.718    10.931    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/ctrl_gemv_x_val[0]
-    SLICE_X72Y174        LUT6 (Prop_D6LUT_SLICEL_I2_O)
-                                                      0.036    10.967 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_16__4/O
-                         net (fo=1, routed)           1.114    12.081    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/A[0]
-    DSP48E2_X11Y102      DSP_A_B_DATA (Prop_DSP_A_B_DATA_DSP48E2_A[0]_A2_DATA[0])
-                                                      0.192    12.273 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_A_B_DATA_INST/A2_DATA[0]
-                         net (fo=1, routed)           0.000    12.273    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_A_B_DATA.A2_DATA<0>
-    DSP48E2_X11Y102      DSP_PREADD_DATA (Prop_DSP_PREADD_DATA_DSP48E2_A2_DATA[0]_A2A1[0])
-                                                      0.076    12.349 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_PREADD_DATA_INST/A2A1[0]
-                         net (fo=1, routed)           0.000    12.349    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_PREADD_DATA.A2A1<0>
-    DSP48E2_X11Y102      DSP_MULTIPLIER (Prop_DSP_MULTIPLIER_DSP48E2_A2A1[0]_U[21])
-                                                      0.505    12.854 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_MULTIPLIER_INST/U[21]
-                         net (fo=1, routed)           0.000    12.854    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_MULTIPLIER.U<21>
-    DSP48E2_X11Y102      DSP_M_DATA (Prop_DSP_M_DATA_DSP48E2_U[21]_U_DATA[21])
-                                                      0.047    12.901 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_M_DATA_INST/U_DATA[21]
-                         net (fo=1, routed)           0.000    12.901    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_M_DATA.U_DATA<21>
-    DSP48E2_X11Y102      DSP_ALU (Prop_DSP_ALU_DSP48E2_U_DATA[21]_ALU_OUT[47])
-                                                      0.585    13.486 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_ALU_INST/ALU_OUT[47]
-                         net (fo=1, routed)           0.000    13.486    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_ALU.ALU_OUT<47>
-    DSP48E2_X11Y102      DSP_OUTPUT (Prop_DSP_OUTPUT_DSP48E2_ALU_OUT[47]_PCOUT[47])
-                                                      0.122    13.608 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_OUTPUT_INST/PCOUT[47]
-                         net (fo=1, routed)           0.014    13.622    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/adder_out/PCIN[47]
-    DSP48E2_X11Y103      DSP_ALU (Prop_DSP_ALU_DSP48E2_PCIN[47]_ALU_OUT[31])
-                                                      0.546    14.168 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/adder_out/DSP_ALU_INST/ALU_OUT[31]
-                         net (fo=1, routed)           0.000    14.168    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/adder_out/DSP_ALU.ALU_OUT<31>
-    DSP48E2_X11Y103      DSP_OUTPUT (Prop_DSP_OUTPUT_DSP48E2_ALU_OUT[31]_P[31])
-                                                      0.109    14.277 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/adder_out/DSP_OUTPUT_INST/P[31]
-                         net (fo=21, routed)          0.429    14.706    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/C[33]
-    DSP48E2_X11Y102      DSP_C_DATA                                   r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_C_DATA_INST/C[33]
+    RAMB36_X4Y13         RAMB36E2 (Prop_RAMB36E2_RAMB36_CLKARDCLK_CASDOUTA[9])
+                                                      1.060     3.433 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_45/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     3.470    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_45_n_26
+    RAMB36_X4Y14         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     3.680 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_46/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     3.717    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_46_n_26
+    RAMB36_X4Y15         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     3.927 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_47/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     3.964    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_47_n_26
+    RAMB36_X4Y16         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     4.174 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_48/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     4.211    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_48_n_26
+    RAMB36_X4Y17         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     4.421 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_49/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     4.458    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_49_n_26
+    RAMB36_X4Y18         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     4.668 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_50/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     4.705    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_50_n_26
+    RAMB36_X4Y19         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_CASDOUTA[9])
+                                                      0.210     4.915 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_51/CASDOUTA[9]
+                         net (fo=1, routed)           0.037     4.952    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_51_n_26
+    RAMB36_X4Y20         RAMB36E2 (Prop_RAMB36E2_RAMB36_CASDINA[9]_DOUTADOUT[9])
+                                                      0.117     5.069 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/gen_banks[2].mem_reg_bram_52/DOUTADOUT[9]
+                         net (fo=8, routed)           1.508     6.577    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/buffer_pl_clk_0.PL_CLK_0_BUFG[183]
+    SLICE_X93Y216        LUT6 (Prop_C6LUT_SLICEM_I1_O)
+                                                      0.098     6.675 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_930/O
+                         net (fo=1, routed)           0.531     7.206    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_930_n_0
+    SLICE_X89Y255        LUT6 (Prop_F6LUT_SLICEM_I1_O)
+                                                      0.098     7.304 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_412/O
+                         net (fo=1, routed)           1.123     8.427    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_412_n_0
+    SLICE_X67Y172        LUT6 (Prop_D6LUT_SLICEM_I1_O)
+                                                      0.051     8.478 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_159/O
+                         net (fo=1, routed)           0.025     8.503    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_159_n_0
+    SLICE_X67Y172        MUXF7 (Prop_F7MUX_CD_SLICEM_I0_O)
+                                                      0.069     8.572 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_57/O
+                         net (fo=1, routed)           0.178     8.750    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_57_n_0
+    SLICE_X66Y173        LUT6 (Prop_B6LUT_SLICEL_I0_O)
+                                                      0.036     8.786 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_29/O
+                         net (fo=256, routed)         2.250    11.037    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/ctrl_gemv_x_val[5]
+    SLICE_X50Y310        LUT4 (Prop_D5LUT_SLICEM_I2_O)
+                                                      0.066    11.103 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_memory/mult_out_i_11__226/O
+                         net (fo=1, routed)           0.546    11.649    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/A[5]
+    DSP48E2_X2Y128       DSP_A_B_DATA (Prop_DSP_A_B_DATA_DSP48E2_A[5]_A2_DATA[5])
+                                                      0.192    11.841 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_A_B_DATA_INST/A2_DATA[5]
+                         net (fo=1, routed)           0.000    11.841    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_A_B_DATA.A2_DATA<5>
+    DSP48E2_X2Y128       DSP_PREADD_DATA (Prop_DSP_PREADD_DATA_DSP48E2_A2_DATA[5]_A2A1[5])
+                                                      0.076    11.917 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_PREADD_DATA_INST/A2A1[5]
+                         net (fo=1, routed)           0.000    11.917    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_PREADD_DATA.A2A1<5>
+    DSP48E2_X2Y128       DSP_MULTIPLIER (Prop_DSP_MULTIPLIER_DSP48E2_A2A1[5]_U[26])
+                                                      0.505    12.422 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_MULTIPLIER_INST/U[26]
+                         net (fo=1, routed)           0.000    12.422    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_MULTIPLIER.U<26>
+    DSP48E2_X2Y128       DSP_M_DATA (Prop_DSP_M_DATA_DSP48E2_U[26]_U_DATA[26])
+                                                      0.047    12.469 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_M_DATA_INST/U_DATA[26]
+                         net (fo=1, routed)           0.000    12.469    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_M_DATA.U_DATA<26>
+    DSP48E2_X2Y128       DSP_ALU (Prop_DSP_ALU_DSP48E2_U_DATA[26]_ALU_OUT[47])
+                                                      0.585    13.054 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_ALU_INST/ALU_OUT[47]
+                         net (fo=1, routed)           0.000    13.054    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_ALU.ALU_OUT<47>
+    DSP48E2_X2Y128       DSP_OUTPUT (Prop_DSP_OUTPUT_DSP48E2_ALU_OUT[47]_PCOUT[47])
+                                                      0.122    13.176 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_OUTPUT_INST/PCOUT[47]
+                         net (fo=1, routed)           0.014    13.190    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/adder_out/PCIN[47]
+    DSP48E2_X2Y129       DSP_ALU (Prop_DSP_ALU_DSP48E2_PCIN[47]_ALU_OUT[31])
+                                                      0.546    13.736 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/adder_out/DSP_ALU_INST/ALU_OUT[31]
+                         net (fo=1, routed)           0.000    13.736    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/adder_out/DSP_ALU.ALU_OUT<31>
+    DSP48E2_X2Y129       DSP_OUTPUT (Prop_DSP_OUTPUT_DSP48E2_ALU_OUT[31]_P[31])
+                                                      0.109    13.845 r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/adder_out/DSP_OUTPUT_INST/P[31]
+                         net (fo=20, routed)          0.415    14.259    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/C[34]
+    DSP48E2_X2Y128       DSP_C_DATA                                   r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_C_DATA_INST/C[34]
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pl_0 rise edge)
@@ -317,17 +314,17 @@ Slack (MET) :             0.281ns  (required time - arrival time)
                          net (fo=1, routed)           0.143    13.477    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.025    13.502 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.784    15.286    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/CLK
-    DSP48E2_X11Y102      DSP_C_DATA                                   r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_C_DATA_INST/CLK
-                         clock pessimism              0.097    15.383    
-                         clock uncertainty           -0.141    15.242    
-    DSP48E2_X11Y102      DSP_C_DATA (Setup_DSP_C_DATA_DSP48E2_CLK_C[33])
-                                                     -0.255    14.987    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[0].gen_col[21].u_pe/mult_out/DSP_C_DATA_INST
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.643    15.145    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/CLK
+    DSP48E2_X2Y128       DSP_C_DATA                                   r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_C_DATA_INST/CLK
+                         clock pessimism              0.097    15.242    
+                         clock uncertainty           -0.141    15.101    
+    DSP48E2_X2Y128       DSP_C_DATA (Setup_DSP_C_DATA_DSP48E2_CLK_C[34])
+                                                     -0.247    14.854    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_c_engine/gen_row[7].gen_col[3].u_pe/mult_out/DSP_C_DATA_INST
   -------------------------------------------------------------------
-                         required time                         14.987    
-                         arrival time                         -14.706    
+                         required time                         14.854    
+                         arrival time                         -14.259    
   -------------------------------------------------------------------
-                         slack                                  0.281    
+                         slack                                  0.595    
 
 
 
@@ -335,22 +332,22 @@ Slack (MET) :             0.281ns  (required time - arrival time)
 
 Min Delay Paths
 --------------------------------------------------------------------------------------
-Slack (MET) :             0.012ns  (arrival time - required time)
-  Source:                 zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_pack_pointer_reg[0]/C
+Slack (MET) :             0.007ns  (arrival time - required time)
+  Source:                 zcu106_unified_bd_i/axi_smc_rd/inst/s00_nodes/s00_r_node/inst/inst_mi_handler/gen_normal_area.inst_fifo_node_payld/gen_xpm_memory_fifo.inst_fifo/gen_mem_rep[0].inst_xpm_memory/xpm_memory_base_inst/gen_rd_b.gen_rd_b_synth_template.gen_rf_narrow_reg.doutb_reg_reg[20]/C
                             (rising edge-triggered cell FDRE clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
-  Destination:            zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_fill_mask_reg[3]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
+  Destination:            zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/shift_reg_reg[0]_srl32/D
+                            (rising edge-triggered cell SRLC32E clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
   Path Group:             clk_pl_0
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pl_0 rise@0.000ns - clk_pl_0 rise@0.000ns)
-  Data Path Delay:        0.271ns  (logic 0.125ns (46.190%)  route 0.146ns (53.810%))
-  Logic Levels:           1  (LUT4=1)
-  Clock Path Skew:        0.198ns (DCD - SCD - CPR)
-    Destination Clock Delay (DCD):    2.011ns
-    Source Clock Delay      (SCD):    1.716ns
-    Clock Pessimism Removal (CPR):    0.097ns
-  Clock Net Delay (Source):      1.548ns (routing 0.512ns, distribution 1.036ns)
-  Clock Net Delay (Destination): 1.803ns (routing 0.569ns, distribution 1.234ns)
+  Data Path Delay:        0.159ns  (logic 0.061ns (38.365%)  route 0.098ns (61.635%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.097ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.034ns
+    Source Clock Delay      (SCD):    1.726ns
+    Clock Pessimism Removal (CPR):    0.212ns
+  Clock Net Delay (Source):      1.558ns (routing 0.512ns, distribution 1.046ns)
+  Clock Net Delay (Destination): 1.826ns (routing 0.569ns, distribution 1.257ns)
 
     Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
   -------------------------------------------------------------------    -------------------
@@ -360,16 +357,13 @@ Slack (MET) :             0.012ns  (arrival time - required time)
                          net (fo=1, routed)           0.143     0.143    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.025     0.168 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.548     1.716    zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/aclk
-    SLICE_X50Y179        FDRE                                         r  zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_pack_pointer_reg[0]/C
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.558     1.726    zcu106_unified_bd_i/axi_smc_rd/inst/s00_nodes/s00_r_node/inst/inst_mi_handler/gen_normal_area.inst_fifo_node_payld/gen_xpm_memory_fifo.inst_fifo/gen_mem_rep[0].inst_xpm_memory/xpm_memory_base_inst/clka
+    SLICE_X50Y80         FDRE                                         r  zcu106_unified_bd_i/axi_smc_rd/inst/s00_nodes/s00_r_node/inst/inst_mi_handler/gen_normal_area.inst_fifo_node_payld/gen_xpm_memory_fifo.inst_fifo/gen_mem_rep[0].inst_xpm_memory/xpm_memory_base_inst/gen_rd_b.gen_rd_b_synth_template.gen_rf_narrow_reg.doutb_reg_reg[20]/C
   -------------------------------------------------------------------    -------------------
-    SLICE_X50Y179        FDRE (Prop_HFF2_SLICEM_C_Q)
-                                                      0.059     1.775 f  zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_pack_pointer_reg[0]/Q
-                         net (fo=22, routed)          0.110     1.884    zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_cmd_fifo/w_fill_mask_reg[11][0]
-    SLICE_X50Y182        LUT4 (Prop_D6LUT_SLICEM_I2_O)
-                                                      0.066     1.950 r  zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_cmd_fifo/w_fill_mask[3]_i_1/O
-                         net (fo=1, routed)           0.036     1.986    zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_cmd_fifo_n_35
-    SLICE_X50Y182        FDRE                                         r  zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_fill_mask_reg[3]/D
+    SLICE_X50Y80         FDRE (Prop_DFF2_SLICEM_C_Q)
+                                                      0.061     1.787 r  zcu106_unified_bd_i/axi_smc_rd/inst/s00_nodes/s00_r_node/inst/inst_mi_handler/gen_normal_area.inst_fifo_node_payld/gen_xpm_memory_fifo.inst_fifo/gen_mem_rep[0].inst_xpm_memory/xpm_memory_base_inst/gen_rd_b.gen_rd_b_synth_template.gen_rf_narrow_reg.doutb_reg_reg[20]/Q
+                         net (fo=1, routed)           0.098     1.885    zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/m_axi_rdata[0]
+    SLICE_X50Y79         SRLC32E                                      r  zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/shift_reg_reg[0]_srl32/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pl_0 rise edge)
@@ -378,16 +372,16 @@ Slack (MET) :             0.012ns  (arrival time - required time)
                          net (fo=1, routed)           0.180     0.180    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.028     0.208 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.803     2.011    zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/aclk
-    SLICE_X50Y182        FDRE                                         r  zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_fill_mask_reg[3]/C
-                         clock pessimism             -0.097     1.914    
-    SLICE_X50Y182        FDRE (Hold_DFF_SLICEM_C_D)
-                                                      0.060     1.974    zcu106_unified_bd_i/axi_smc_wr/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/w_fill_mask_reg[3]
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.826     2.034    zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/aclk
+    SLICE_X50Y79         SRLC32E                                      r  zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/shift_reg_reg[0]_srl32/CLK
+                         clock pessimism             -0.212     1.822    
+    SLICE_X50Y79         SRLC32E (Hold_A6LUT_SLICEM_CLK_D)
+                                                      0.055     1.877    zcu106_unified_bd_i/axi_smc_rd/inst/s00_entry_pipeline/s00_si_converter/inst/converter.wrap_narrow_inst/gen_thread_loop[0].r_payld_fifo/gen_srls[16].srl_nx1/shift_reg_reg[0]_srl32
   -------------------------------------------------------------------
-                         required time                         -1.974    
-                         arrival time                           1.986    
+                         required time                         -1.877    
+                         arrival time                           1.885    
   -------------------------------------------------------------------
-                         slack                                  0.012    
+                         slack                                  0.007    
 
 
 
@@ -412,33 +406,33 @@ Path Group:  **async_default**
 From Clock:  clk_pl_0
   To Clock:  clk_pl_0
 
-Setup :            0  Failing Endpoints,  Worst Slack        8.974ns,  Total Violation        0.000ns
-Hold  :            0  Failing Endpoints,  Worst Slack        0.169ns,  Total Violation        0.000ns
+Setup :            0  Failing Endpoints,  Worst Slack        5.980ns,  Total Violation        0.000ns
+Hold  :            0  Failing Endpoints,  Worst Slack        0.264ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 
 
 Max Delay Paths
 --------------------------------------------------------------------------------------
-Slack (MET) :             8.974ns  (required time - arrival time)
+Slack (MET) :             5.980ns  (required time - arrival time)
   Source:                 zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
                             (rising edge-triggered cell FDRE clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
-  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/conv_weight_addr_reg[0]_rep__10/CLR
+  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/current_conv_bias_reg[3]/CLR
                             (recovery check against rising-edge clock clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
   Path Group:             **async_default**
   Path Type:              Recovery (Max at Slow Process Corner)
   Requirement:            13.334ns  (clk_pl_0 rise@13.334ns - clk_pl_0 rise@0.000ns)
-  Data Path Delay:        4.204ns  (logic 0.230ns (5.471%)  route 3.974ns (94.529%))
-  Logic Levels:           2  (BUFGCE=1 LUT2=1)
-  Clock Path Skew:        0.051ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    1.894ns = ( 15.228 - 13.334 ) 
-    Source Clock Delay      (SCD):    1.940ns
+  Data Path Delay:        7.176ns  (logic 0.168ns (2.341%)  route 7.008ns (97.659%))
+  Logic Levels:           1  (LUT2=1)
+  Clock Path Skew:        0.029ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.936ns = ( 15.270 - 13.334 ) 
+    Source Clock Delay      (SCD):    2.004ns
     Clock Pessimism Removal (CPR):    0.097ns
   Clock Uncertainty:      0.141ns  ((TSJ^2 + DJ^2)^1/2) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Discrete Jitter          (DJ):    0.273ns
     Phase Error              (PE):    0.000ns
-  Clock Net Delay (Source):      1.732ns (routing 0.569ns, distribution 1.163ns)
-  Clock Net Delay (Destination): 1.726ns (routing 0.512ns, distribution 1.214ns)
+  Clock Net Delay (Source):      1.796ns (routing 0.569ns, distribution 1.227ns)
+  Clock Net Delay (Destination): 1.768ns (routing 0.512ns, distribution 1.256ns)
 
     Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
   -------------------------------------------------------------------    -------------------
@@ -448,19 +442,16 @@ Slack (MET) :             8.974ns  (required time - arrival time)
                          net (fo=1, routed)           0.180     0.180    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.028     0.208 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.732     1.940    zcu106_unified_bd_i/rst_ps8_0/U0/slowest_sync_clk
-    SLICE_X52Y132        FDRE                                         r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.796     2.004    zcu106_unified_bd_i/rst_ps8_0/U0/slowest_sync_clk
+    SLICE_X52Y51         FDRE                                         r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
   -------------------------------------------------------------------    -------------------
-    SLICE_X52Y132        FDRE (Prop_AFF_SLICEL_C_Q)
-                                                      0.079     2.019 r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/Q
-                         net (fo=618, routed)         1.161     3.181    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/aresetn
-    SLICE_X62Y138        LUT2 (Prop_C6LUT_SLICEL_I1_O)
-                                                      0.123     3.304 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/m_axi_araddr[31]_i_2/O
-                         net (fo=25, routed)          1.203     4.507    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/sys_reset_bufg_place
-    BUFGCE_X1Y50         BUFGCE (Prop_BUFCE_BUFGCE_I_O)
-                                                      0.028     4.535 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/m_axi_araddr[31]_i_2_bufg_place/O
-                         net (fo=11586, routed)       1.609     6.144    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/sys_reset
-    SLICE_X31Y311        FDCE                                         f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/conv_weight_addr_reg[0]_rep__10/CLR
+    SLICE_X52Y51         FDRE (Prop_AFF_SLICEL_C_Q)
+                                                      0.079     2.083 r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/Q
+                         net (fo=653, routed)         4.804     6.887    zcu106_unified_bd_i/c_engine_dma_top_0/inst/aresetn
+    SLICE_X59Y274        LUT2 (Prop_D6LUT_SLICEL_I1_O)
+                                                      0.089     6.976 f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/mult_out_i_1__14__0/O
+                         net (fo=681, routed)         2.205     9.180    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/mult_out_i_1__14__0_n_0_alias
+    SLICE_X75Y324        FDCE                                         f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/current_conv_bias_reg[3]/CLR
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pl_0 rise edge)
@@ -469,17 +460,17 @@ Slack (MET) :             8.974ns  (required time - arrival time)
                          net (fo=1, routed)           0.143    13.477    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.025    13.502 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.726    15.228    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/aclk
-    SLICE_X31Y311        FDCE                                         r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/conv_weight_addr_reg[0]_rep__10/C
-                         clock pessimism              0.097    15.325    
-                         clock uncertainty           -0.141    15.184    
-    SLICE_X31Y311        FDCE (Recov_DFF_SLICEM_C_CLR)
-                                                     -0.066    15.118    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/conv_weight_addr_reg[0]_rep__10
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.768    15.270    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/aclk
+    SLICE_X75Y324        FDCE                                         r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/current_conv_bias_reg[3]/C
+                         clock pessimism              0.097    15.367    
+                         clock uncertainty           -0.141    15.226    
+    SLICE_X75Y324        FDCE (Recov_HFF2_SLICEL_C_CLR)
+                                                     -0.066    15.160    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_engine/u_controller/current_conv_bias_reg[3]
   -------------------------------------------------------------------
-                         required time                         15.118    
-                         arrival time                          -6.144    
+                         required time                         15.160    
+                         arrival time                          -9.180    
   -------------------------------------------------------------------
-                         slack                                  8.974    
+                         slack                                  5.980    
 
 
 
@@ -487,22 +478,22 @@ Slack (MET) :             8.974ns  (required time - arrival time)
 
 Min Delay Paths
 --------------------------------------------------------------------------------------
-Slack (MET) :             0.169ns  (arrival time - required time)
+Slack (MET) :             0.264ns  (arrival time - required time)
   Source:                 zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
                             (rising edge-triggered cell FDRE clocked by clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
-  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[12]/CLR
+  Destination:            zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[13]/CLR
                             (removal check against rising-edge clock clk_pl_0  {rise@0.000ns fall@6.667ns period=13.334ns})
   Path Group:             **async_default**
   Path Type:              Removal (Min at Fast Process Corner)
   Requirement:            0.000ns  (clk_pl_0 rise@0.000ns - clk_pl_0 rise@0.000ns)
-  Data Path Delay:        0.169ns  (logic 0.039ns (23.091%)  route 0.130ns (76.909%))
+  Data Path Delay:        0.297ns  (logic 0.039ns (13.130%)  route 0.258ns (86.870%))
   Logic Levels:           0  
-  Clock Path Skew:        0.020ns (DCD - SCD - CPR)
-    Destination Clock Delay (DCD):    1.253ns
-    Source Clock Delay      (SCD):    1.092ns
-    Clock Pessimism Removal (CPR):    0.142ns
-  Clock Net Delay (Source):      0.953ns (routing 0.311ns, distribution 0.642ns)
-  Clock Net Delay (Destination): 1.081ns (routing 0.352ns, distribution 0.729ns)
+  Clock Path Skew:        0.053ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    1.270ns
+    Source Clock Delay      (SCD):    1.128ns
+    Clock Pessimism Removal (CPR):    0.090ns
+  Clock Net Delay (Source):      0.989ns (routing 0.311ns, distribution 0.678ns)
+  Clock Net Delay (Destination): 1.098ns (routing 0.352ns, distribution 0.746ns)
 
     Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
   -------------------------------------------------------------------    -------------------
@@ -512,13 +503,13 @@ Slack (MET) :             0.169ns  (arrival time - required time)
                          net (fo=1, routed)           0.122     0.122    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.017     0.139 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       0.953     1.092    zcu106_unified_bd_i/rst_ps8_0/U0/slowest_sync_clk
-    SLICE_X52Y132        FDRE                                         r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       0.989     1.128    zcu106_unified_bd_i/rst_ps8_0/U0/slowest_sync_clk
+    SLICE_X52Y51         FDRE                                         r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/C
   -------------------------------------------------------------------    -------------------
-    SLICE_X52Y132        FDRE (Prop_AFF_SLICEL_C_Q)
-                                                      0.039     1.131 r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/Q
-                         net (fo=618, routed)         0.130     1.260    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/aresetn
-    SLICE_X52Y127        FDCE                                         f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[12]/CLR  (IS_INVERTED)
+    SLICE_X52Y51         FDRE (Prop_AFF_SLICEL_C_Q)
+                                                      0.039     1.167 r  zcu106_unified_bd_i/rst_ps8_0/U0/ACTIVE_LOW_PR_OUT_DFF[0].FDRE_PER_N/Q
+                         net (fo=653, routed)         0.258     1.425    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/aresetn
+    SLICE_X51Y73         FDCE                                         f  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[13]/CLR  (IS_INVERTED)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pl_0 rise edge)
@@ -527,16 +518,16 @@ Slack (MET) :             0.169ns  (arrival time - required time)
                          net (fo=1, routed)           0.154     0.154    zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/pl_clk_unbuffered[0]
     BUFG_PS_X0Y80        BUFG_PS (Prop_BUFG_PS_I_O)
                                                       0.018     0.172 r  zcu106_unified_bd_i/zynq_ultra_ps_e_0/inst/buffer_pl_clk_0.PL_CLK_0_BUFG/O
-    X1Y2 (CLOCK_ROOT)    net (fo=58009, routed)       1.081     1.253    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/aclk
-    SLICE_X52Y127        FDCE                                         r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[12]/C
-                         clock pessimism             -0.142     1.111    
-    SLICE_X52Y127        FDCE (Remov_EFF_SLICEL_C_CLR)
-                                                     -0.020     1.091    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[12]
+    X1Y2 (CLOCK_ROOT)    net (fo=60427, routed)       1.098     1.270    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/aclk
+    SLICE_X51Y73         FDCE                                         r  zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[13]/C
+                         clock pessimism             -0.090     1.180    
+    SLICE_X51Y73         FDCE (Remov_AFF_SLICEL_C_CLR)
+                                                     -0.020     1.160    zcu106_unified_bd_i/c_engine_dma_top_0/inst/u_axi_lite/wr_data_reg[13]
   -------------------------------------------------------------------
-                         required time                         -1.091    
-                         arrival time                           1.260    
+                         required time                         -1.160    
+                         arrival time                           1.425    
   -------------------------------------------------------------------
-                         slack                                  0.169    
+                         slack                                  0.264    
 
 
 

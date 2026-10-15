@@ -48,35 +48,35 @@ def pack_config_word(mode, chin, chout, kw, kh, shift_bits, in_base, wt_base, ou
                      dma_rd_en=0, dma_wr_en=0, dma_beats=0, num_chunks=1):
     """Packs layer parameters into a 128-bit Config Word matching RTL config_mem."""
     word = 0
-    # Word 0 [31:0]
-    word |= (int(mode) & 0x3) << 0
-    word |= (int(chin) & 0xFF) << 2
-    word |= (int(chout) & 0xFF) << 10
-    word |= (int(kw) & 0xF) << 18
-    word |= (int(kh) & 0xF) << 22
-    word |= (int(shift_bits) & 0x1F) << 26
-    word |= (int(pad_type) & 0x1) << 31
+    # Dword 0 [31:0]
+    word |= (int(mode) & 0x3) << 0           # [1:0]   2 bits
+    word |= (int(chin) & 0xFFF) << 2         # [13:2]  12 bits (0..4095)
+    word |= (int(chout) & 0xFFF) << 14       # [25:14] 12 bits (0..4095)
+    word |= (int(kw) & 0xF) << 26            # [29:26] 4 bits
+    word |= (int(stride) & 0x3) << 30        # [31:30] 2 bits
 
-    # Word 1 [63:32]
-    word |= (int(in_base) & 0x3FFF) << 32
-    word |= (int(wt_base) & 0x3FFF) << 46
-    word |= (int(act_type) & 0x3) << 60
-    word |= (int(stride) & 0x3) << 62
+    # Dword 1 [63:32]
+    word |= (int(kh) & 0xF) << 32            # [35:32] 4 bits
+    word |= (int(shift_bits) & 0x1F) << 36   # [40:36] 5 bits
+    word |= (int(act_type) & 0x3) << 41      # [42:41] 2 bits
+    word |= (int(pad_type) & 0x1) << 43      # [43]    1 bit
+    word |= (int(pool_type) & 0x3) << 44     # [45:44] 2 bits
+    word |= (int(pool_size) & 0x3) << 46     # [47:46] 2 bits
+    word |= (int(pool_stride) & 0x3) << 48   # [49:48] 2 bits
+    word |= (int(residual_en) & 0x1) << 50   # [50]    1 bit
+    word |= (int(dma_rd_en) & 0x1) << 51     # [51]    1 bit
+    word |= (int(dma_wr_en) & 0x1) << 52     # [52]    1 bit
+    word |= (int(is_last) & 0x1) << 53       # [53]    1 bit
+    word |= (int(dma_beats) & 0x7F) << 54    # [60:54] 7 bits
 
-    # Word 2 [95:64]
-    word |= (int(out_base) & 0x3FFF) << 64
-    word |= (int(residual_base_addr) & 0x3FFF) << 78
-    word |= (int(residual_en) & 0x1) << 92
-    word |= (int(dma_rd_en) & 0x1) << 93
-    word |= (int(dma_wr_en) & 0x1) << 94
-    word |= (int(is_last) & 0x1) << 95
+    # Dword 2 [95:64]
+    word |= (int(in_base) & 0x3FFF) << 64    # [77:64] 14 bits (SRAM row 0..16383)
+    word |= (int(wt_base) & 0x3FFF) << 78    # [91:78] 14 bits (SRAM row 0..16383)
+    word |= (int(num_chunks) & 0xFF) << 92   # [99:92] 8 bits (1..255)
 
-    # Word 3 [127:96]
-    word |= (int(pool_type) & 0x3) << 96
-    word |= (int(pool_size) & 0x3) << 98
-    word |= (int(pool_stride) & 0x3) << 100
-    word |= (int(num_chunks) & 0xFF) << 102
-    word |= (int(dma_beats) & 0x7F) << 110
+    # Dword 3 [127:96]
+    word |= (int(out_base) & 0x3FFF) << 100  # [113:100] 14 bits (SRAM row 0..16383)
+    word |= (int(residual_base_addr) & 0x3FFF) << 114 # [127:114] 14 bits (SRAM row 0..16383)
 
     return word
 

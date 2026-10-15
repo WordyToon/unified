@@ -4,10 +4,10 @@
 
 task automatic load_mobilenetv2_microcode;
 begin
-    u_dut.u_engine.u_config_mem.mem[0] = 128'h00008001000007d010f00578984400f1;
-    u_dut.u_engine.u_config_mem.mem[1] = 128'h00008001000007d110f00578984400f1;
-    u_dut.u_engine.u_config_mem.mem[2] = 128'h00008001000007d210f00578984400f1;
-    u_dut.u_engine.u_config_mem.mem[3] = 128'h00009001900007d310f00578984400f1;
+    u_dut.u_engine.u_config_mem.mem[0] = 128'h00007d0011e0057800010861444000f1;
+    u_dut.u_engine.u_config_mem.mem[1] = 128'h00007d1011e0057800010861444000f1;
+    u_dut.u_engine.u_config_mem.mem[2] = 128'h00007d2011e0057800010861444000f1;
+    u_dut.u_engine.u_config_mem.mem[3] = 128'h00007d3011e0057804310861444000f1;
 end
 endtask
 
