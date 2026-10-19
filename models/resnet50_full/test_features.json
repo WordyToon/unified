@@ -1,7 +1,7 @@
 {
   "precision_bits": 8,
-  "gemv_weight_byte_offset": 23508096,
-  "total_weights_bytes": 23569536,
+  "gemv_weight_byte_offset": 23631104,
+  "total_weights_bytes": 23692544,
   "projection_matrix": [
     [
       -0.006518953945487738,

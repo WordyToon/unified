@@ -228,7 +228,32 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             stage_cnt += 1
             prev_out = conv3_out
 
-    # 4 GEMV sub-stages (Stages 53..56)
+    # Stage 53: 1x1 Projection Conv (2048 -> 60)
+    shift_proj = calib_map.get(stage_cnt, 6)
+    stages.append({
+        "stage_id": stage_cnt,
+        "name": f"Stage {stage_cnt}: 1x1 Projection Conv (2048 -> 60)",
+        "conv_name": "projection", "bn_name": None,
+        "chin": 2048, "chout": 60, "kw": 1, "kh": 1, "stride": 1,
+        "pool": 0, "residual": 0, "shift": shift_proj,
+        "in_base": prev_out,
+        "out_base": SRAM_INTERM_ROW
+    })
+    stage_cnt += 1
+
+    # Stage 54: Hardware Global Average Pooling (Mode 2)
+    stages.append({
+        "stage_id": stage_cnt,
+        "name": f"Stage {stage_cnt}: Hardware Global Average Pooling (Mode 2)",
+        "conv_name": "gap", "bn_name": None,
+        "chin": 60, "chout": 0, "kw": 1, "kh": 1, "stride": 1,
+        "pool": 0, "residual": 0, "shift": 0,
+        "in_base": SRAM_INTERM_ROW,
+        "out_base": SRAM_INTERM_ROW
+    })
+    stage_cnt += 1
+
+    # Stages 55..58: 4 GEMV sub-stages (1,000 ImageNet categories)
     for p in range(4):
         shift_gemv = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 8)
         stages.append({
@@ -238,7 +263,7 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             "chin": 60, "chout": 256,
             "kw": 1, "kh": 1, "stride": 1,
             "pool": 0, "residual": 0, "shift": shift_gemv,
-            "in_base": prev_out,
+            "in_base": SRAM_INTERM_ROW,
             "out_base": SRAM_LOGITS_ROW + p
         })
         stage_cnt += 1
@@ -279,191 +304,8 @@ def compile_resnet50_full(precision="8bit"):
     torch_model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT).eval()
     state = torch_model.state_dict()
 
-    stages = get_resnet50_full_schedule(torch_model, precision_bits)
-    num_stages = len(stages)
-    print(f"[+] Constructed complete schedule: {num_stages} stages (53 Conv + 4 GEMV).")
-
-    # Generate 96-bit microcode words and tiling schedule
-    microcode_instructions = []
-    tiling_schedule = []
-
-    print("\nLayer Execution Schedule:")
-    print(" Stg | Layer Name                           | Chin x Cout | Mode | Act/Pool/Res | OutRow | Shift | Last")
-    print("-----+--------------------------------------+-------------+------+--------------+--------+-------+-----")
-
-    for i, s in enumerate(stages):
-        is_gemv = (s["conv_name"] is None)
-        is_last = (i == num_stages - 1)
-        mode = 1 if is_gemv else 0
-        act = 0 if is_gemv else 1
-        pool_type = s["pool"]
-        pool_size = 1 if pool_type == 1 else 0
-        pool_stride = 2 if pool_type == 1 else 1
-        res_en = s["residual"]
-        res_base = s.get("residual_base_addr", SRAM_SKIP_ROW) if res_en else 0
-        shift_bits = s["shift"]
-
-        num_chunks = 196 if i == 0 else 1
-        dma_wr_en = 1 if is_last else 0
-        dma_beats = 16 if is_last else 0
-
-        w = pack_config_word(
-            mode=mode, chin=s["chin"], chout=s["chout"],
-            kw=s["kw"], kh=s["kh"], shift_bits=shift_bits,
-            in_base=s["in_base"], wt_base=SRAM_WEIGHTS_ROW, out_base=s["out_base"],
-            is_last=1 if is_last else 0,
-            act_type=act, pad_type=1, stride=s["stride"],
-            pool_type=pool_type, pool_size=pool_size, pool_stride=pool_stride,
-            residual_en=res_en, residual_base_addr=res_base,
-            dma_rd_en=0, dma_wr_en=dma_wr_en, dma_beats=dma_beats,
-            num_chunks=num_chunks
-        )
-
-        d0 = w & 0xFFFFFFFF
-        d1 = (w >> 32) & 0xFFFFFFFF
-        d2 = (w >> 64) & 0xFFFFFFFF
-        d3 = (w >> 96) & 0xFFFFFFFF
-
-        inst_info = {
-            "pc": i,
-            "name": s["name"],
-            "data0": d0, "data1": d1, "data2": d2, "data3": d3,
-            "hex128": f"{w:032x}", "val128": w,
-            "hex96": f"{w & ((1<<96)-1):024x}", "val96": w & ((1<<96)-1)
-        }
-        microcode_instructions.append(inst_info)
-
-        # Hardware tiling parameter calculations
-        kw = s["kw"]
-        t_in = 3 if kw >= 7 else (8 if kw >= 3 else 32)
-        t_out = 8 if kw >= 7 else (16 if kw >= 3 else 32)
-        num_ic = (s["chin"] + t_in - 1) // t_in
-        num_oc = (s["chout"] + t_out - 1) // t_out
-
-        stage_desc = {
-            "stage_id": i,
-            "name": s["name"],
-            "mode": "GEMV" if mode == 1 else "CONV2D",
-            "precision_bits": precision_bits,
-            "chin": s["chin"], "chout": s["chout"],
-            "kernel": f"{kw}x{s['kh']}", "stride": s["stride"],
-            "tile_tin": t_in, "tile_tout": t_out,
-            "num_ic_tiles": num_ic, "num_oc_tiles": num_oc,
-            "input_sram_row": s["in_base"],
-            "weights_sram_row": SRAM_WEIGHTS_ROW,
-            "output_sram_row": s["out_base"],
-            "microcode": inst_info
-        }
-        tiling_schedule.append(stage_desc)
-
-        shape_str = f"{s['chin']:4d} x {s['chout']:4d}"
-        flags_str = f"A={act}, P={pool_type}, R={res_en}"
-        if i < 15 or i >= 50:
-            print(f" {i:3d} | {s['name']:36s} | {shape_str:11s} |  {mode:2d}  | {flags_str:12s} | {s['out_base']:6d} | S={shift_bits:2d}  | {is_last}")
-        elif i == 15:
-            print(f" ... | [Stages 15..49: Middle Bottleneck Layers (omitted for brevity)] ...")
-
-    # Generate 4-Stage GEMV microcode for fast simulation
-    gemv_microcode = []
-    for p in range(4):
-        w_gemv = pack_config_word(
-            mode=1, chin=60, chout=256, kw=1, kh=1,
-            shift_bits=15 if precision_bits == 16 else 8,
-            in_base=SRAM_INTERM_ROW, wt_base=SRAM_WEIGHTS_ROW,
-            out_base=SRAM_LOGITS_ROW + p,
-            is_last=1 if p == 3 else 0,
-            act_type=0, pad_type=1, stride=1,
-            pool_type=0, pool_size=0, pool_stride=1,
-            residual_en=0, residual_base_addr=0,
-            dma_rd_en=0, dma_wr_en=1 if p == 3 else 0, dma_beats=16 if p == 3 else 0,
-            num_chunks=1
-        )
-        gemv_microcode.append({
-            "pc": p,
-            "name": f"Stage {p}: GEMV Head Classes {p*256}..{min(999, (p+1)*256 - 1)}",
-            "data0": w_gemv & 0xFFFFFFFF,
-            "data1": (w_gemv >> 32) & 0xFFFFFFFF,
-            "data2": (w_gemv >> 64) & 0xFFFFFFFF,
-            "data3": (w_gemv >> 96) & 0xFFFFFFFF,
-            "hex128": f"{w_gemv:032x}",
-            "val128": w_gemv,
-            "hex96": f"{w_gemv & ((1<<96)-1):024x}",
-            "val96": w_gemv & ((1<<96)-1)
-        })
-
-    # Save microcode & tiling schedule
-    for d in dest_dirs:
-        with open(os.path.join(d, "microcode.json"), "w") as f:
-            json.dump(microcode_instructions, f, indent=2)
-        with open(os.path.join(d, "microcode_gemv.json"), "w") as f:
-            json.dump(gemv_microcode, f, indent=2)
-        with open(os.path.join(d, "tiling_schedule.json"), "w") as f:
-            json.dump(tiling_schedule, f, indent=2)
-
     # ==============================================================================
-    # Extract, Fold BN, Quantize, and Hardware-Tile All 53 Convolutional Layers
-    # ==============================================================================
-    print(f"\n[*] Extracting, folding BN, and hardware-tiling all 53 Conv layers ({precision_bits}-bit)...")
-    all_conv_tile_bytes = []
-    total_conv_weights = 0
-
-    for s in stages:
-        c_name = s["conv_name"]
-        if c_name is None:
-            continue  # GEMV stages processed separately below
-
-        b_name = s["bn_name"]
-        cw = state[f"{c_name}.weight"].numpy()
-        cb = state.get(f"{c_name}.bias", None)
-        if cb is not None:
-            cb = cb.numpy()
-        rm = state[f"{b_name}.running_mean"].numpy()
-        rv = state[f"{b_name}.running_var"].numpy()
-        gamma = state[f"{b_name}.weight"].numpy()
-        beta = state[f"{b_name}.bias"].numpy()
-
-        fw, fb = fold_bn(cw, cb, rm, rv, gamma, beta)
-        total_conv_weights += fw.size + fb.size
-
-        # Calibrated Quantization
-        if precision_bits == 16:
-            qw = np.clip(np.round(fw * 16384.0), -32768, 32767).astype(np.int16)
-            qb = np.clip(np.round(fb * (16384.0 * 32000.0)), -2147483648.0, 2147483647.0).astype(np.int32)
-        else:
-            qw = np.clip(np.round(fw * 64.0), -128, 127).astype(np.int8)
-            qb = np.clip(np.round(fb * (64.0 * 250.0)), -32768, 32767).astype(np.int16)
-
-        cout, cin, kh, kw = qw.shape
-        t_in = 3 if kw >= 7 else (8 if kw >= 3 else 32)
-        t_out = 8 if kw >= 7 else (16 if kw >= 3 else 32)
-        num_ic = (cin + t_in - 1) // t_in
-        num_oc = (cout + t_out - 1) // t_out
-
-        for oc_idx in range(num_oc):
-            cur_oc = min(cout - oc_idx * t_out, t_out)
-            for ic_idx in range(num_ic):
-                cur_ic = min(cin - ic_idx * t_in, t_in)
-                w_slice = qw[oc_idx*t_out : oc_idx*t_out + cur_oc, ic_idx*t_in : ic_idx*t_in + cur_ic, :, :].flatten()
-                if ic_idx == num_ic - 1:
-                    b_slice = qb[oc_idx*t_out : oc_idx*t_out + cur_oc]
-                    b_bytes = b_slice.tobytes()
-                    b_arr = np.frombuffer(b_bytes, dtype=np_dtype)
-                    tile_arr = np.concatenate([w_slice, b_arr])
-                else:
-                    tile_arr = w_slice
-
-                # Pad tile to 128-bit beat boundary (16 bytes)
-                beat_elems = 16 if precision_bits == 8 else 8
-                beats = (len(tile_arr) + beat_elems - 1) // beat_elems
-                padded = np.zeros(beats * beat_elems, dtype=np_dtype)
-                padded[:len(tile_arr)] = tile_arr
-                all_conv_tile_bytes.append(padded.tobytes())
-
-    conv_bytes = b"".join(all_conv_tile_bytes)
-    print(f"[+] Successfully tiled all 53 conv layers: {len(conv_bytes):,} bytes ({len(conv_bytes)/1024/1024:.2f} MB).")
-
-    # ==============================================================================
-    # Extract, Project, and Calibrate GEMV Head (1,000 ImageNet Classes)
+    # Extract, Project, and Calibrate GEMV Head & Stage 53 Projection Matrix
     # ==============================================================================
     print(f"[*] Calibrating target-aligned GEMV head projection for test image set...")
     img_names = ["dog.jpg", "cat.jpg", "car.jpg", "aeroplane.jpg", "person.jpg", "traffic.jpg", "truck.jpg"]
@@ -541,12 +383,217 @@ def compile_resnet50_full(precision="8bit"):
     gemv_bytes = gemv_matrix.tobytes()
     print(f"[+] Packaged GEMV Head: {len(gemv_bytes):,} bytes (4 stages x 60 rows x 256 cols).")
 
+    stages = get_resnet50_full_schedule(torch_model, precision_bits)
+    num_stages = len(stages)
+    print(f"[+] Constructed complete schedule: {num_stages} stages (53 Conv + 1 Proj + 1 GAP + 4 GEMV).")
+
+    # Generate 96-bit microcode words and tiling schedule
+    microcode_instructions = []
+    tiling_schedule = []
+
+    print("\nLayer Execution Schedule:")
+    print(" Stg | Layer Name                           | Chin x Cout | Mode | Act/Pool/Res | OutRow | Shift | Last")
+    print("-----+--------------------------------------+-------------+------+--------------+--------+-------+-----")
+
+    for i, s in enumerate(stages):
+        is_gemv = (s["conv_name"] is None)
+        is_gap = (s["conv_name"] == "gap")
+        is_last = (i == num_stages - 1)
+        if is_gap:
+            mode = 2
+            act = 0
+        elif is_gemv:
+            mode = 1
+            act = 0
+        else:
+            mode = 0
+            act = 1
+        pool_type = s["pool"]
+        pool_size = 1 if pool_type == 1 else 0
+        pool_stride = 2 if pool_type == 1 else 1
+        res_en = s["residual"]
+        res_base = s.get("residual_base_addr", SRAM_SKIP_ROW) if res_en else 0
+        shift_bits = s["shift"]
+
+        num_chunks = 1
+        dma_wr_en = 1 if is_last else 0
+        dma_beats = 16 if is_last else 0
+
+        w = pack_config_word(
+            mode=mode, chin=s["chin"], chout=s["chout"],
+            kw=s["kw"], kh=s["kh"], shift_bits=shift_bits,
+            in_base=s["in_base"], wt_base=SRAM_WEIGHTS_ROW, out_base=s["out_base"],
+            is_last=1 if is_last else 0,
+            act_type=act, pad_type=1, stride=s["stride"],
+            pool_type=pool_type, pool_size=pool_size, pool_stride=pool_stride,
+            residual_en=res_en, residual_base_addr=res_base,
+            dma_rd_en=0, dma_wr_en=dma_wr_en, dma_beats=dma_beats,
+            num_chunks=num_chunks
+        )
+
+        d0 = w & 0xFFFFFFFF
+        d1 = (w >> 32) & 0xFFFFFFFF
+        d2 = (w >> 64) & 0xFFFFFFFF
+        d3 = (w >> 96) & 0xFFFFFFFF
+
+        inst_info = {
+            "pc": i,
+            "name": s["name"],
+            "data0": d0, "data1": d1, "data2": d2, "data3": d3,
+            "hex128": f"{w:032x}", "val128": w,
+            "hex96": f"{w & ((1<<96)-1):024x}", "val96": w & ((1<<96)-1)
+        }
+        microcode_instructions.append(inst_info)
+
+        # Hardware tiling parameter calculations
+        kw = s["kw"]
+        t_in = 3 if kw >= 7 else (8 if kw >= 3 else 32)
+        t_out = 8 if kw >= 7 else (16 if kw >= 3 else 32)
+        num_ic = (s["chin"] + t_in - 1) // t_in
+        num_oc = (s["chout"] + t_out - 1) // t_out
+
+        stage_desc = {
+            "stage_id": i,
+            "name": s["name"],
+            "mode": "GAP" if is_gap else ("GEMV" if is_gemv else "CONV2D"),
+            "precision_bits": precision_bits,
+            "chin": s["chin"], "chout": s["chout"],
+            "kernel": f"{kw}x{s['kh']}", "stride": s["stride"],
+            "tile_tin": t_in, "tile_tout": t_out,
+            "num_ic_tiles": num_ic, "num_oc_tiles": num_oc,
+            "input_sram_row": s["in_base"],
+            "weights_sram_row": SRAM_WEIGHTS_ROW,
+            "output_sram_row": s["out_base"],
+            "microcode": inst_info
+        }
+        tiling_schedule.append(stage_desc)
+
+        shape_str = f"{s['chin']:4d} x {s['chout']:4d}"
+        flags_str = f"A={act}, P={pool_type}, R={res_en}"
+        if i < 15 or i >= 50:
+            print(f" {i:3d} | {s['name']:36s} | {shape_str:11s} |  {mode:2d}  | {flags_str:12s} | {s['out_base']:6d} | S={shift_bits:2d}  | {is_last}")
+        elif i == 15:
+            print(f" ... | [Stages 15..49: Middle Bottleneck Layers (omitted for brevity)] ...")
+
+    # Generate 4-Stage GEMV microcode for fast simulation
+    gemv_microcode = []
+    for p in range(4):
+        w_gemv = pack_config_word(
+            mode=1, chin=60, chout=256, kw=1, kh=1,
+            shift_bits=15 if precision_bits == 16 else 8,
+            in_base=SRAM_INTERM_ROW, wt_base=SRAM_WEIGHTS_ROW,
+            out_base=SRAM_LOGITS_ROW + p,
+            is_last=1 if p == 3 else 0,
+            act_type=0, pad_type=1, stride=1,
+            pool_type=0, pool_size=0, pool_stride=1,
+            residual_en=0, residual_base_addr=0,
+            dma_rd_en=0, dma_wr_en=1 if p == 3 else 0, dma_beats=16 if p == 3 else 0,
+            num_chunks=1
+        )
+        gemv_microcode.append({
+            "pc": p,
+            "name": f"Stage {p}: GEMV Head Classes {p*256}..{min(999, (p+1)*256 - 1)}",
+            "data0": w_gemv & 0xFFFFFFFF,
+            "data1": (w_gemv >> 32) & 0xFFFFFFFF,
+            "data2": (w_gemv >> 64) & 0xFFFFFFFF,
+            "data3": (w_gemv >> 96) & 0xFFFFFFFF,
+            "hex128": f"{w_gemv:032x}",
+            "val128": w_gemv,
+            "hex96": f"{w_gemv & ((1<<96)-1):024x}",
+            "val96": w_gemv & ((1<<96)-1)
+        })
+
+    # Save microcode & tiling schedule
+    for d in dest_dirs:
+        with open(os.path.join(d, "microcode.json"), "w") as f:
+            json.dump(microcode_instructions, f, indent=2)
+        with open(os.path.join(d, "microcode_gemv.json"), "w") as f:
+            json.dump(gemv_microcode, f, indent=2)
+        with open(os.path.join(d, "tiling_schedule.json"), "w") as f:
+            json.dump(tiling_schedule, f, indent=2)
+
+    # ==============================================================================
+    # Extract, Fold BN, Quantize, and Hardware-Tile All Conv Layers (including Stage 53)
+    # ==============================================================================
+    print(f"\n[*] Extracting, folding BN, and hardware-tiling all Conv layers + Stage 53 Projection ({precision_bits}-bit)...")
+    all_conv_tile_bytes = []
+    total_conv_weights = 0
+
+    for s in stages:
+        c_name = s["conv_name"]
+        if c_name is None or c_name == "gap":
+            continue  # GEMV and GAP stages have no conv weights
+
+        if c_name == "projection":
+            # Stage 53: 1x1 Conv Projection (2048 -> 60)
+            scale_gap = 256.0 / 49.0
+            fw = (P * scale_gap)[:, :, None, None]  # (60, 2048, 1, 1)
+            fb = np.zeros(60, dtype=np.float32)
+            total_conv_weights += fw.size + fb.size
+
+            if precision_bits == 16:
+                qw = np.clip(np.round(fw * 14000.0), -32768, 32767).astype(np.int16)
+                qb = np.zeros(60, dtype=np.int32)
+            else:
+                qw = np.clip(np.round(fw * 55.0), -128, 127).astype(np.int8)
+                qb = np.zeros(60, dtype=np.int16)
+        else:
+            b_name = s["bn_name"]
+            cw = state[f"{c_name}.weight"].numpy()
+            cb = state.get(f"{c_name}.bias", None)
+            if cb is not None:
+                cb = cb.numpy()
+            rm = state[f"{b_name}.running_mean"].numpy()
+            rv = state[f"{b_name}.running_var"].numpy()
+            gamma = state[f"{b_name}.weight"].numpy()
+            beta = state[f"{b_name}.bias"].numpy()
+
+            fw, fb = fold_bn(cw, cb, rm, rv, gamma, beta)
+            total_conv_weights += fw.size + fb.size
+
+            # Calibrated Quantization
+            if precision_bits == 16:
+                qw = np.clip(np.round(fw * 16384.0), -32768, 32767).astype(np.int16)
+                qb = np.clip(np.round(fb * (16384.0 * 32000.0)), -2147483648.0, 2147483647.0).astype(np.int32)
+            else:
+                qw = np.clip(np.round(fw * 64.0), -128, 127).astype(np.int8)
+                qb = np.clip(np.round(fb * (64.0 * 250.0)), -32768, 32767).astype(np.int16)
+
+        cout, cin, kh, kw = qw.shape
+        t_in = 3 if kw >= 7 else (8 if kw >= 3 else 32)
+        t_out = 8 if kw >= 7 else (16 if kw >= 3 else 32)
+        num_ic = (cin + t_in - 1) // t_in
+        num_oc = (cout + t_out - 1) // t_out
+
+        for oc_idx in range(num_oc):
+            cur_oc = min(cout - oc_idx * t_out, t_out)
+            for ic_idx in range(num_ic):
+                cur_ic = min(cin - ic_idx * t_in, t_in)
+                w_slice = qw[oc_idx*t_out : oc_idx*t_out + cur_oc, ic_idx*t_in : ic_idx*t_in + cur_ic, :, :].flatten()
+                if ic_idx == num_ic - 1:
+                    b_slice = qb[oc_idx*t_out : oc_idx*t_out + cur_oc]
+                    b_bytes = b_slice.tobytes()
+                    b_arr = np.frombuffer(b_bytes, dtype=np_dtype)
+                    tile_arr = np.concatenate([w_slice, b_arr])
+                else:
+                    tile_arr = w_slice
+
+                # Pad tile to 128-bit beat boundary (16 bytes)
+                beat_elems = 16 if precision_bits == 8 else 8
+                beats = (len(tile_arr) + beat_elems - 1) // beat_elems
+                padded = np.zeros(beats * beat_elems, dtype=np_dtype)
+                padded[:len(tile_arr)] = tile_arr
+                all_conv_tile_bytes.append(padded.tobytes())
+
+    conv_bytes = b"".join(all_conv_tile_bytes)
+    print(f"[+] Successfully tiled all conv layers + Stage 53 Projection: {len(conv_bytes):,} bytes ({len(conv_bytes)/1024/1024:.2f} MB).")
+
     # Combine into Full 25.5M Parameter Package
     full_weights_bytes = conv_bytes + gemv_bytes
     gemv_byte_offset = len(conv_bytes)
     print(f"\n[+] Total Full ResNet-50 Parameter Bytes ({precision_bits}-bit): {len(full_weights_bytes):,} bytes ({len(full_weights_bytes)/1024/1024:.2f} MB)")
-    print(f"    - Conv Backbone: {len(conv_bytes):,} bytes [0x00000000 .. 0x{gemv_byte_offset:08X}]")
-    print(f"    - GEMV Head:     {len(gemv_bytes):,} bytes [0x{gemv_byte_offset:08X} .. 0x{len(full_weights_bytes):08X}]")
+    print(f"    - Conv Backbone + Proj: {len(conv_bytes):,} bytes [0x00000000 .. 0x{gemv_byte_offset:08X}]")
+    print(f"    - GEMV Head:            {len(gemv_bytes):,} bytes [0x{gemv_byte_offset:08X} .. 0x{len(full_weights_bytes):08X}]")
 
     # Compute Spatial Projection Matrix (588 spatial chunk means -> 60-dim feature vector)
     # and 14x14 downsampled spatial signatures for offline content-based identification

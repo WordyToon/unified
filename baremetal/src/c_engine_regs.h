@@ -78,7 +78,7 @@ extern "C" {
 #define DDR_ACCEL_EFF_FEAT_OFFSET       181248U  // 960 beats (15,360 B 8-bit, 30,720 B 16-bit) EfficientNet-B0 features
 
 // GEMV Head Weight Offsets within full weight binaries:
-#define DDR_ACCEL_R50_GEMV_WT_OFFSET    23508096U // 61,440 B 8-bit ResNet-50 GEMV head weights
+#define DDR_ACCEL_R50_GEMV_WT_OFFSET    23631104U // 61,440 B 8-bit ResNet-50 GEMV head weights (after Stage 53 Projection)
 #define DDR_ACCEL_MBV2_GEMV_WT_OFFSET   2206816U  // 61,440 B 8-bit MobileNetV2 GEMV head weights
 #define DDR_ACCEL_EFF_GEMV_WT_OFFSET    3350000U  // 61,440 B 8-bit EfficientNet-B0 GEMV head weights
 
