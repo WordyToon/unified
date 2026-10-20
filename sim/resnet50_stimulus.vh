@@ -4,10 +4,10 @@
 
 task automatic load_resnet50_microcode;
 begin
-    u_dut.u_engine.u_config_mem.mem[0] = 128'h00007d001e42083400010871444000f1;
-    u_dut.u_engine.u_config_mem.mem[1] = 128'h00007d101e42083400010871444000f1;
-    u_dut.u_engine.u_config_mem.mem[2] = 128'h00007d201e42083400010871444000f1;
-    u_dut.u_engine.u_config_mem.mem[3] = 128'h00007d301e42083404310871444000f1;
+    u_dut.u_engine.u_config_mem.mem[0] = 128'h00007d001e42083400010881444000f1;
+    u_dut.u_engine.u_config_mem.mem[1] = 128'h00007d101e42083400010881444000f1;
+    u_dut.u_engine.u_config_mem.mem[2] = 128'h00007d201e42083400010881444000f1;
+    u_dut.u_engine.u_config_mem.mem[3] = 128'h00007d301e42083404310881444000f1;
 end
 endtask
 

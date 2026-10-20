@@ -114,7 +114,7 @@ def main():
 
     q_dot = np.dot(qw.astype(np.int32), qf.astype(np.int32))
     # Select shift to keep max logit in [50, 120] range
-    shift_gemv = 7
+    shift_gemv = 8
     q_logits = q_dot >> shift_gemv
     top5_quant = np.argsort(q_logits)[-5:][::-1]
     print(f"\n[+] Quantized INT8 GEMV Output (shift={shift_gemv}):")
@@ -164,3 +164,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

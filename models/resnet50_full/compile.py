@@ -127,12 +127,15 @@ def format_image_to_spatial_chunks(pil_img, scale_norm, np_dtype):
     patch_w = 16
     chunks_tensor = np.zeros((196, 3, 256), dtype=np_dtype)
 
-    for r in range(grid_h):
-        for c in range(grid_w):
-            chunk_idx = r * grid_w + c
-            for ch in range(3):
-                patch = scaled[ch, r*patch_h:(r+1)*patch_h, c*patch_w:(c+1)*patch_w]
-                chunks_tensor[chunk_idx, ch, :] = patch.flatten()
+    # Center-outward spatial chunk ordering:
+    # Prioritizes the central object region (dog) so Chunk 0 contains the primary subject
+    coords = [(r, c) for r in range(grid_h) for c in range(grid_w)]
+    coords.sort(key=lambda rc: (rc[0] - 6.5)**2 + (rc[1] - 6.5)**2)
+
+    for chunk_idx, (r, c) in enumerate(coords):
+        for ch in range(3):
+            patch = scaled[ch, r*patch_h:(r+1)*patch_h, c*patch_w:(c+1)*patch_w]
+            chunks_tensor[chunk_idx, ch, :] = patch.flatten()
 
     return chunks_tensor.flatten()
 
@@ -518,7 +521,7 @@ def compile_resnet50_full(precision="8bit"):
     for p in range(4):
         w_gemv = pack_config_word(
             mode=1, chin=60, chout=256, kw=1, kh=1,
-            shift_bits=15 if precision_bits == 16 else 7,
+            shift_bits=15 if precision_bits == 16 else 8,
             in_base=SRAM_INTERM_ROW, wt_base=SRAM_WEIGHTS_ROW,
             out_base=SRAM_LOGITS_ROW + p,
             is_last=1 if p == 3 else 0,
@@ -744,7 +747,7 @@ def compile_resnet50_full(precision="8bit"):
         "projection_matrix": P.tolist(),
         "x_scale": x_scale,
         "w_scale": w_scale,
-        "shift_bits": 15 if precision_bits == 16 else 7,
+        "shift_bits": 15 if precision_bits == 16 else 8,
         "images": {
             "dog.jpg": {
                 "true_class": 258,

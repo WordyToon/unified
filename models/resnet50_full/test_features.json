@@ -123006,7 +123006,7 @@
   ],
   "x_scale": 0.10441353172063828,
   "w_scale": 0.008148322813212872,
-  "shift_bits": 7,
+  "shift_bits": 8,
   "images": {
     "dog.jpg": {
       "true_class": 258,
