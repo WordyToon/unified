@@ -47,12 +47,12 @@
   {
     "stage": 9,
     "name": "layer1.2.conv2",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 10,
     "name": "layer1.2.conv3",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 11,
@@ -62,17 +62,17 @@
   {
     "stage": 12,
     "name": "layer2.0.conv1",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 13,
     "name": "layer2.0.conv2",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 14,
     "name": "layer2.0.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 15,
@@ -82,17 +82,17 @@
   {
     "stage": 16,
     "name": "layer2.1.conv2",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 17,
     "name": "layer2.1.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 18,
     "name": "layer2.2.conv1",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 19,
@@ -102,12 +102,12 @@
   {
     "stage": 20,
     "name": "layer2.2.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 21,
     "name": "layer2.3.conv1",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 22,
@@ -117,7 +117,7 @@
   {
     "stage": 23,
     "name": "layer2.3.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 24,
@@ -127,67 +127,67 @@
   {
     "stage": 25,
     "name": "layer3.0.conv1",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 26,
     "name": "layer3.0.conv2",
-    "shift": 3
+    "shift": 6
   },
   {
     "stage": 27,
     "name": "layer3.0.conv3",
-    "shift": 8
+    "shift": 6
   },
   {
     "stage": 28,
     "name": "layer3.1.conv1",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 29,
     "name": "layer3.1.conv2",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 30,
     "name": "layer3.1.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 31,
     "name": "layer3.2.conv1",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 32,
     "name": "layer3.2.conv2",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 33,
     "name": "layer3.2.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 34,
     "name": "layer3.3.conv1",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 35,
     "name": "layer3.3.conv2",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 36,
     "name": "layer3.3.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 37,
     "name": "layer3.4.conv1",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 38,
@@ -197,22 +197,22 @@
   {
     "stage": 39,
     "name": "layer3.4.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 40,
     "name": "layer3.5.conv1",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 41,
     "name": "layer3.5.conv2",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 42,
     "name": "layer3.5.conv3",
-    "shift": 8
+    "shift": 6
   },
   {
     "stage": 43,
@@ -222,7 +222,7 @@
   {
     "stage": 44,
     "name": "layer4.0.conv1",
-    "shift": 5
+    "shift": 6
   },
   {
     "stage": 45,
@@ -232,12 +232,12 @@
   {
     "stage": 46,
     "name": "layer4.0.conv3",
-    "shift": 7
+    "shift": 6
   },
   {
     "stage": 47,
     "name": "layer4.1.conv1",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 48,
@@ -247,12 +247,12 @@
   {
     "stage": 49,
     "name": "layer4.1.conv3",
-    "shift": 8
+    "shift": 6
   },
   {
     "stage": 50,
     "name": "layer4.2.conv1",
-    "shift": 4
+    "shift": 6
   },
   {
     "stage": 51,
@@ -262,7 +262,7 @@
   {
     "stage": 52,
     "name": "layer4.2.conv3",
-    "shift": 8
+    "shift": 6
   },
   {
     "stage": 53,
@@ -277,21 +277,21 @@
   {
     "stage": 55,
     "name": "gemv_0",
-    "shift": 8
+    "shift": 7
   },
   {
     "stage": 56,
     "name": "gemv_1",
-    "shift": 8
+    "shift": 7
   },
   {
     "stage": 57,
     "name": "gemv_2",
-    "shift": 8
+    "shift": 7
   },
   {
     "stage": 58,
     "name": "gemv_3",
-    "shift": 8
+    "shift": 7
   }
 ]

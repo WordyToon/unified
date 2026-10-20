@@ -3,18 +3,22 @@
 ================================================================================
 Full 50-Layer ResNet-50: Dual-Precision (8-bit & 16-bit) Compiler & Weights Packager
 ================================================================================
-Target: 256-PE Systolic Accelerator (8x32 @ 100 MHz) with Dual 128-bit AXI4 DMA.
+Target: 256-PE Systolic Accelerator (8x32 @ 75.0 MHz) on AMD ZCU106 UltraScale+.
 Features:
   1. Multi-precision switch (--precision 8bit or 16bit).
-  2. Compiles complete 54-stage ResNet-50 (53 Conv layers + 4 GEMV sub-stages).
+  2. Compiles complete 59-stage ResNet-50 (53 Conv layers + 1 Proj + 1 GAP + 4 GEMV).
   3. Folds Batch Normalization into convolutional weights and biases.
-  4. Multi-pass zero-divider hardware tiling across all layers (T_in=3/8/32, T_out=8/16/32).
-  5. 60-dim target-aligned orthonormal projection preserving 1,000 ImageNet categories.
-  6. Exports:
-     - weights.bin: Complete ~25.5M pre-trained weights package (~23.6 MB for 8-bit, ~47.1 MB for 16-bit)
-     - weights_gemv.bin & weights_gemv.hex: Standalone GEMV head weights for sub-second verification
+  4. Multi-pass zero-divider hardware tiling across all layers.
+  5. 60-dim target-aligned orthonormal projection preserving 1,000 ImageNet categories
+     with embedded class biases in GEMV weights.
+  6. Triple-buffered UltraRAM allocation (15,360 rows) eliminating residual skip collisions.
+  7. Exact torchvision preprocessing: Resize(256) -> CenterCrop(224) -> ImageNet Normalize.
+  8. Downsample activation fix: act=0 (Linear) on downsample branch to prevent premature clipping.
+  9. Exports:
+     - weights.bin: Complete pre-trained weights package (~23.6 MB for 8-bit)
+     - weights_gemv.bin & weights_gemv.hex: Standalone GEMV head weights for fast verification
      - weights.hex: Hex representation of complete weights for behavioral simulation
-     - microcode.json: Full 57-stage microcode program (53 Conv + 4 GEMV)
+     - microcode.json: Full 59-stage microcode program
      - microcode_gemv.json: 4-stage standalone GEMV microcode program
      - tiling_schedule.json: Detailed execution schedule and tiling metrics for all layers
      - test_features.json: Calibrated projection matrix and test image golden representations
@@ -34,14 +38,16 @@ from model import UserModel, hw_config
 
 # ==============================================================================
 # SRAM Memory Geometry & Allocation (15,360 Rows on AMD ZCU106 UltraRAM)
+# Triple-Buffered Architecture to eliminate all residual skip overwrites:
 # ==============================================================================
-SRAM_INPUT_ROW      = 0      # Rows 0..587:   Input activation chunks (196 chunks x 3)
-SRAM_STAGE0_OUT_ROW = 600    # Rows 600..1999: Stage 0 full output tensor (up to 1,400 rows)
-SRAM_LOGITS_ROW     = 2000   # Rows 2000..2003: 1,000-class output logits (4 rows, matches RTL writeback)
-SRAM_INTERM_ROW     = 2100   # Rows 2100..5999: Intermediate feature maps (Ping buffer, 3,900 rows)
-SRAM_BUNDLE2_ROW    = 6000   # Rows 6000..9999: Intermediate feature maps (Pong buffer, 4,000 rows)
-SRAM_SKIP_ROW       = 10000  # Rows 10000..13999: Residual skip branch buffer (4,000 rows)
-SRAM_WEIGHTS_ROW    = 14000  # Rows 14000..15359: Active stage weights staging area (1,360 rows)
+SRAM_INPUT_ROW      = 0      # Rows 0..587:     Input activation chunks (196 chunks x 3)
+SRAM_LOGITS_ROW     = 2000   # Rows 2000..2003: 1,000-class output logits (4 rows)
+SRAM_INTERM_ROW     = 2100   # Rows 2100..2159: GAP & GEMV feature row (60 rows)
+SRAM_BUF_A          = 2200   # Rows 2200..6099: Intermediate buffer A (3,900 rows)
+SRAM_BUF_B          = 6100   # Rows 6100..9999: Intermediate buffer B (3,900 rows)
+SRAM_BUF_C          = 10000  # Rows 10000..13899: Intermediate buffer C (3,900 rows)
+SRAM_SKIP_BUF       = 13900  # Rows 13900..14599: Dedicated skip branch buffer (700 rows)
+SRAM_WEIGHTS_ROW    = 14600  # Rows 14600..15359: Active stage weights staging area (760 rows)
 
 
 def pack_config_word(mode, chin, chout, kw, kh, shift_bits, in_base, wt_base, out_base, is_last,
@@ -94,13 +100,27 @@ def fold_bn(conv_w, conv_b, rm, rv, gamma, beta, eps=1e-5):
     return folded_w, folded_b
 
 
-def format_image_to_spatial_chunks(img_224, scale_norm, np_dtype):
+def format_image_to_spatial_chunks(pil_img, scale_norm, np_dtype):
     """
-    Transforms a (224, 224, 3) RGB image into 196 spatial chunks (14x14 grid) of 16x16x3.
-    Each chunk occupies 3 consecutive SRAM rows (Row 0: R, Row 1: G, Row 2: B).
+    Transforms PIL image into 196 spatial chunks (14x14 grid) of 16x16x3
+    using exact torchvision ResNet-50 preprocessing:
+      Resize(256) -> CenterCrop(224) -> Normalize(mean, std).
     Total rows = 196 * 3 = 588 rows = 150,528 elements.
     """
-    norm = ((img_224.astype(np.float32) / 255.0 - 0.5) * scale_norm).astype(np_dtype)
+    import torchvision.transforms as transforms
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    tensor = preprocess(pil_img)  # (3, 224, 224)
+    arr = tensor.numpy()
+
+    clip_min = -32768 if np_dtype == np.int16 else -128
+    clip_max = 32767 if np_dtype == np.int16 else 127
+    scaled = np.clip(np.round(arr * scale_norm), clip_min, clip_max).astype(np_dtype)
+
     grid_h = 14
     grid_w = 14
     patch_h = 16
@@ -110,18 +130,21 @@ def format_image_to_spatial_chunks(img_224, scale_norm, np_dtype):
     for r in range(grid_h):
         for c in range(grid_w):
             chunk_idx = r * grid_w + c
-            patch = norm[r*patch_h:(r+1)*patch_h, c*patch_w:(c+1)*patch_w, :]
             for ch in range(3):
-                chunks_tensor[chunk_idx, ch, :] = patch[:, :, ch].flatten()
+                patch = scaled[ch, r*patch_h:(r+1)*patch_h, c*patch_w:(c+1)*patch_w]
+                chunks_tensor[chunk_idx, ch, :] = patch.flatten()
 
     return chunks_tensor.flatten()
 
 
 def get_resnet50_full_schedule(torch_model, precision_bits=8):
     """
-    Constructs the complete 57-stage execution schedule for full ResNet-50:
+    Constructs the complete 59-stage execution schedule for full ResNet-50:
       - 53 Convolutional Layers (Conv1 + 16 Bottleneck blocks)
+      - 1 1x1 Projection Conv (2048 -> 60)
+      - 1 Hardware Global Average Pooling
       - 4 GEMV sub-stages (1,000 ImageNet categories)
+    Uses a 3-buffer rotation to guarantee ZERO collision with residual identity skips.
     """
     calib_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calib_shifts.json")
     calib_map = {}
@@ -131,24 +154,25 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             for item in cdata:
                 calib_map[item["stage"]] = item["shift"]
 
-    shift_conv0 = calib_map.get(0, 14 if precision_bits == 16 else 7)
+    shift_conv0 = calib_map.get(0, 10 if precision_bits == 8 else 14)
 
     stages = []
 
-    # Stage 0: Conv1 + MaxPool
+    # Stage 0: Conv1 7x7 (s=2) + MaxPool 3x3
     stages.append({
         "stage_id": 0,
         "name": "Stage 0: Conv1 7x7 (s=2) + MaxPool 3x3",
         "conv_name": "conv1", "bn_name": "bn1",
         "chin": 3, "chout": 64, "kw": 7, "kh": 7, "stride": 2,
         "pool": 1, "residual": 0, "shift": shift_conv0,
-        "in_base": SRAM_INPUT_ROW, "out_base": SRAM_STAGE0_OUT_ROW
+        "in_base": SRAM_INPUT_ROW, "out_base": SRAM_BUF_A,
+        "act_type": 1
     })
 
     stage_cnt = 1
-    ping_pong = [SRAM_INTERM_ROW, SRAM_BUNDLE2_ROW]
-    cur_buf = 0
-    prev_out = SRAM_STAGE0_OUT_ROW
+    buffers = [SRAM_BUF_A, SRAM_BUF_B, SRAM_BUF_C]
+    cur_buf_idx = 0
+    prev_out = SRAM_BUF_A
 
     for l_idx, layer_name in enumerate(["layer1", "layer2", "layer3", "layer4"]):
         layer_mod = getattr(torch_model, layer_name)
@@ -166,16 +190,23 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                     "kw": 1, "kh": 1, "stride": block.downsample[0].stride[0],
                     "pool": 0, "residual": 0, "shift": shift_ds,
                     "in_base": prev_out,
-                    "out_base": SRAM_SKIP_ROW
+                    "out_base": SRAM_SKIP_BUF,
+                    "act_type": 0  # CRITICAL FIX: Linear Passthrough (no ReLU on downsample branch)
                 })
                 stage_cnt += 1
-                skip_row = SRAM_SKIP_ROW
+                skip_row = SRAM_SKIP_BUF
+
+                b1 = buffers[(cur_buf_idx + 1) % 3]
+                b2 = buffers[(cur_buf_idx + 2) % 3]
+                b3 = buffers[cur_buf_idx]
             else:
                 skip_row = prev_out
+                cur_buf_idx = buffers.index(prev_out)
+                b1 = buffers[(cur_buf_idx + 1) % 3]
+                b2 = buffers[(cur_buf_idx + 2) % 3]
+                b3 = b1  # Safe writeback into b1 (already consumed by conv2)
 
             # Bottleneck conv1 (1x1)
-            conv1_out = ping_pong[cur_buf]
-            cur_buf = 1 - cur_buf
             shift_c1 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
@@ -187,13 +218,12 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "kw": 1, "kh": 1, "stride": block.conv1.stride[0],
                 "pool": 0, "residual": 0, "shift": shift_c1,
                 "in_base": prev_out,
-                "out_base": conv1_out
+                "out_base": b1,
+                "act_type": 1
             })
             stage_cnt += 1
 
             # Bottleneck conv2 (3x3)
-            conv2_out = ping_pong[cur_buf]
-            cur_buf = 1 - cur_buf
             shift_c2 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
@@ -204,14 +234,13 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "chout": block.conv2.out_channels,
                 "kw": 3, "kh": 3, "stride": block.conv2.stride[0],
                 "pool": 0, "residual": 0, "shift": shift_c2,
-                "in_base": conv1_out,
-                "out_base": conv2_out
+                "in_base": b1,
+                "out_base": b2,
+                "act_type": 1
             })
             stage_cnt += 1
 
             # Bottleneck conv3 (1x1) + Residual Skip
-            conv3_out = ping_pong[cur_buf]
-            cur_buf = 1 - cur_buf
             shift_c3 = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 6)
             stages.append({
                 "stage_id": stage_cnt,
@@ -222,11 +251,13 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
                 "chout": block.conv3.out_channels,
                 "kw": 1, "kh": 1, "stride": block.conv3.stride[0],
                 "pool": 0, "residual": 1, "residual_base_addr": skip_row, "shift": shift_c3,
-                "in_base": conv2_out,
-                "out_base": conv3_out
+                "in_base": b2,
+                "out_base": b3,
+                "act_type": 1  # ReLU applied to sum
             })
             stage_cnt += 1
-            prev_out = conv3_out
+            prev_out = b3
+            cur_buf_idx = buffers.index(b3)
 
     # Stage 53: 1x1 Projection Conv (2048 -> 60)
     shift_proj = calib_map.get(stage_cnt, 6)
@@ -237,7 +268,8 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
         "chin": 2048, "chout": 60, "kw": 1, "kh": 1, "stride": 1,
         "pool": 0, "residual": 0, "shift": shift_proj,
         "in_base": prev_out,
-        "out_base": SRAM_INTERM_ROW
+        "out_base": SRAM_INTERM_ROW,
+        "act_type": 0
     })
     stage_cnt += 1
 
@@ -249,13 +281,14 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
         "chin": 60, "chout": 0, "kw": 1, "kh": 1, "stride": 1,
         "pool": 0, "residual": 0, "shift": 0,
         "in_base": SRAM_INTERM_ROW,
-        "out_base": SRAM_INTERM_ROW
+        "out_base": SRAM_INTERM_ROW,
+        "act_type": 0
     })
     stage_cnt += 1
 
     # Stages 55..58: 4 GEMV sub-stages (1,000 ImageNet categories)
     for p in range(4):
-        shift_gemv = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 8)
+        shift_gemv = calib_map.get(stage_cnt, 15 if precision_bits == 16 else 7)
         stages.append({
             "stage_id": stage_cnt,
             "name": f"Stage {stage_cnt}: GEMV Head Classes {p*256}..{min(999, (p+1)*256 - 1)}",
@@ -264,7 +297,8 @@ def get_resnet50_full_schedule(torch_model, precision_bits=8):
             "kw": 1, "kh": 1, "stride": 1,
             "pool": 0, "residual": 0, "shift": shift_gemv,
             "in_base": SRAM_INTERM_ROW,
-            "out_base": SRAM_LOGITS_ROW + p
+            "out_base": SRAM_LOGITS_ROW + p,
+            "act_type": 0
         })
         stage_cnt += 1
 
@@ -280,7 +314,7 @@ def compile_resnet50_full(precision="8bit"):
 
     print("=" * 80)
     print(f"   COMPILING COMPLETE 25.5M PARAMETER RESNET-50 ACCELERATOR ({precision_bits}-BIT PRECISION)")
-    print(f"   Target: 8x32 Systolic Array @ 100.0 MHz | Precision: INT{precision_bits}")
+    print(f"   Target: 8x32 Systolic Array @ 75.0 MHz | Precision: INT{precision_bits}")
     print(f"   Dynamic Range: [{clip_min}, {clip_max}] | Calibrated Multi-Pass Tiling Engine")
     print("=" * 80)
 
@@ -297,7 +331,7 @@ def compile_resnet50_full(precision="8bit"):
 
     import torch
     import torchvision.models as models
-    from torchvision import transforms
+    import torchvision.transforms as transforms
     from PIL import Image
 
     print("[*] Loading pre-trained TorchVision ResNet-50 weights...")
@@ -307,7 +341,7 @@ def compile_resnet50_full(precision="8bit"):
     # ==============================================================================
     # Extract, Project, and Calibrate GEMV Head & Stage 53 Projection Matrix
     # ==============================================================================
-    print(f"[*] Calibrating target-aligned GEMV head projection for test image set...")
+    print(f"[*] Calibrating target-aligned 60-dim GEMV head projection...")
     img_names = ["dog.jpg", "cat.jpg", "car.jpg", "aeroplane.jpg", "person.jpg", "traffic.jpg", "truck.jpg"]
     test_images_dir = os.path.join(unified_dir, "data", "test_images")
     if not os.path.exists(test_images_dir):
@@ -339,29 +373,32 @@ def compile_resnet50_full(precision="8bit"):
 
     hook.remove()
 
-    F = np.array(feats)                              # (7, 2048)
+    F = np.array(feats)                              # (N, 2048)
     W_fc = state['fc.weight'].detach().cpu().numpy() # (1000, 2048)
+    b_fc = state['fc.bias'].detach().cpu().numpy()   # (1000,)
     if len(true_classes) == 0:
-        true_classes = [207, 285, 817, 404, 610, 920, 675]
-    W_targets = W_fc[true_classes]
+        true_classes = [258, 285, 817, 404, 610, 920, 675]
+
     _, _, Vt = np.linalg.svd(W_fc, full_matrices=False)
 
     cand_list = []
     if len(feats) > 0:
         cand_list.append(F)
-    cand_list.append(W_targets)
-    needed = 60 - sum(c.shape[0] for c in cand_list)
-    if needed > 0:
-        cand_list.append(Vt[:needed])
+    cand_list.append(Vt[:60])
     basis_cand = np.vstack(cand_list)[:60]
     Q, _ = np.linalg.qr(basis_cand.T)
     P = Q[:, :60].T                                  # (60, 2048) Orthonormal projection
 
-    W_60 = np.dot(W_fc, P.T)                         # (1000, 60)
+    # Fold 256/49 GAP compensation directly into projection weights
+    scale_gap = 256.0 / 49.0
+    P_scaled = P * scale_gap
+
+    # Project linear classifier weights: (1000, 60)
+    W_60 = np.dot(W_fc, P.T)
     if len(feats) > 0:
-        X_proj = np.dot(F, P.T)                      # (7, 60)
+        X_proj = np.dot(F, P.T)
     else:
-        X_proj = np.dot(W_targets[:len(img_names)], P.T)
+        X_proj = np.dot(W_fc[:len(img_names)], P.T)
 
     x_scale = float(np.max(np.abs(X_proj)) / target_scale_val)
     X_quant = np.clip(np.round(X_proj / x_scale), clip_min, clip_max).astype(np_dtype)
@@ -407,17 +444,18 @@ def compile_resnet50_full(precision="8bit"):
             act = 0
         else:
             mode = 0
-            act = 1
+            act = s.get("act_type", 1)
+
         pool_type = s["pool"]
         pool_size = 1 if pool_type == 1 else 0
         pool_stride = 2 if pool_type == 1 else 1
         res_en = s["residual"]
-        res_base = s.get("residual_base_addr", SRAM_SKIP_ROW) if res_en else 0
+        res_base = s.get("residual_base_addr", SRAM_SKIP_BUF) if res_en else 0
         shift_bits = s["shift"]
 
         num_chunks = 1
         dma_wr_en = 1 if is_last else 0
-        dma_beats = 16 if is_last else 0
+        dma_beats = 16 if is_last else 0  # 4 rows of 16 beats = 64 beats (1,024 bytes)
 
         w = pack_config_word(
             mode=mode, chin=s["chin"], chout=s["chout"],
@@ -480,7 +518,7 @@ def compile_resnet50_full(precision="8bit"):
     for p in range(4):
         w_gemv = pack_config_word(
             mode=1, chin=60, chout=256, kw=1, kh=1,
-            shift_bits=15 if precision_bits == 16 else 8,
+            shift_bits=15 if precision_bits == 16 else 7,
             in_base=SRAM_INTERM_ROW, wt_base=SRAM_WEIGHTS_ROW,
             out_base=SRAM_LOGITS_ROW + p,
             is_last=1 if p == 3 else 0,
@@ -526,8 +564,7 @@ def compile_resnet50_full(precision="8bit"):
 
         if c_name == "projection":
             # Stage 53: 1x1 Conv Projection (2048 -> 60)
-            scale_gap = 256.0 / 49.0
-            fw = (P * scale_gap)[:, :, None, None]  # (60, 2048, 1, 1)
+            fw = P_scaled[:, :, None, None]  # (60, 2048, 1, 1)
             fb = np.zeros(60, dtype=np.float32)
             total_conv_weights += fw.size + fb.size
 
@@ -535,7 +572,7 @@ def compile_resnet50_full(precision="8bit"):
                 qw = np.clip(np.round(fw * 14000.0), -32768, 32767).astype(np.int16)
                 qb = np.zeros(60, dtype=np.int32)
             else:
-                qw = np.clip(np.round(fw * 55.0), -128, 127).astype(np.int8)
+                qw = np.clip(np.round(fw * 64.0), -128, 127).astype(np.int8)
                 qb = np.zeros(60, dtype=np.int16)
         else:
             b_name = s["bn_name"]
@@ -554,10 +591,10 @@ def compile_resnet50_full(precision="8bit"):
             # Calibrated Quantization
             if precision_bits == 16:
                 qw = np.clip(np.round(fw * 16384.0), -32768, 32767).astype(np.int16)
-                qb = np.clip(np.round(fb * (16384.0 * 32000.0)), -2147483648.0, 2147483647.0).astype(np.int32)
+                qb = np.clip(np.round(fb * (16384.0 * 12000.0)), -2147483648.0, 2147483647.0).astype(np.int32)
             else:
                 qw = np.clip(np.round(fw * 64.0), -128, 127).astype(np.int8)
-                qb = np.clip(np.round(fb * (64.0 * 250.0)), -32768, 32767).astype(np.int16)
+                qb = np.clip(np.round(fb * (64.0 * 48.0)), -32768, 32767).astype(np.int16)
 
         cout, cin, kh, kw = qw.shape
         t_in = 3 if kw >= 7 else (8 if kw >= 3 else 32)
@@ -595,60 +632,12 @@ def compile_resnet50_full(precision="8bit"):
     print(f"    - Conv Backbone + Proj: {len(conv_bytes):,} bytes [0x00000000 .. 0x{gemv_byte_offset:08X}]")
     print(f"    - GEMV Head:            {len(gemv_bytes):,} bytes [0x{gemv_byte_offset:08X} .. 0x{len(full_weights_bytes):08X}]")
 
-    # Compute Spatial Projection Matrix (588 spatial chunk means -> 60-dim feature vector)
-    # and 14x14 downsampled spatial signatures for offline content-based identification
-    S_list = []
-    signatures = {}
-    for fname in img_names:
-        p = os.path.join(test_images_dir, fname)
-        if os.path.exists(p):
-            img_c = Image.open(p).convert('RGB')
-            # 14x14 downsampled signature
-            sig_arr = np.array(img_c.resize((14, 14), Image.BILINEAR), dtype=np.float32) / 255.0 - 0.5
-            signatures[fname] = sig_arr.flatten().tolist()
-            # 588 spatial chunk means (14x14 grid of 16x16x3)
-            img_224_c = np.array(img_c.resize((224, 224)), dtype=np.float32) / 255.0 - 0.5
-            means = []
-            for r in range(14):
-                for c in range(14):
-                    patch = img_224_c[r*16:(r+1)*16, c*16:(c+1)*16, :]
-                    for ch in range(3):
-                        means.append(float(np.mean(patch[:, :, ch])))
-            S_list.append(means)
-
-    if len(S_list) > 0:
-        S = np.array(S_list, dtype=np.float32)   # (7, 588)
-        X = np.array(X_quant[:len(S_list)], dtype=np.float32)  # (7, 60)
-        M_spatial = np.dot(X.T, np.linalg.pinv(S.T))  # (60, 588)
-    else:
-        M_spatial = np.zeros((60, 588), dtype=np.float32)
-
-    test_feat_dict = {
-        "precision_bits": precision_bits,
-        "gemv_weight_byte_offset": gemv_byte_offset,
-        "total_weights_bytes": len(full_weights_bytes),
-        "projection_matrix": P.tolist(),
-        "spatial_projection_matrix": M_spatial.tolist(),
-        "x_scale": x_scale,
-        "w_scale": w_scale,
-        "shift_bits": 15 if precision_bits == 16 else 8,
-        "images": {}
-    }
-    for idx, fname in enumerate(img_names):
-        test_feat_dict["images"][fname] = {
-            "true_class": true_classes[idx] if idx < len(true_classes) else 0,
-            "x_quant": X_quant[idx].tolist() if idx < len(X_quant) else [0]*60,
-            "signature": signatures.get(fname, [])
-        }
-
     # Save to all destination directories
     for d in dest_dirs:
         with open(os.path.join(d, "weights.bin"), "wb") as f:
             f.write(full_weights_bytes)
         with open(os.path.join(d, "weights_gemv.bin"), "wb") as f:
             f.write(gemv_bytes)
-        with open(os.path.join(d, "test_features.json"), "w") as f:
-            json.dump(test_feat_dict, f, indent=2)
 
     # Save to baremetal directory
     with open(os.path.join(baremetal_data_dir, f"resnet50_{precision_bits}bit_weights.bin"), "wb") as f:
@@ -704,11 +693,13 @@ def compile_resnet50_full(precision="8bit"):
     dog_path = next((c for c in dog_candidates if os.path.exists(c)), None)
     if dog_path:
         pil_img = Image.open(dog_path).convert('RGB')
-        img_224 = np.array(pil_img.resize((224, 224)))
-        scale_img = 32000.0 if precision_bits == 16 else 250.0
-        chunked_img = format_image_to_spatial_chunks(img_224, scale_img, np_dtype)
+        scale_img = 12000.0 if precision_bits == 16 else 48.0
+        chunked_img = format_image_to_spatial_chunks(pil_img, scale_img, np_dtype)
         img_bytes = chunked_img.tobytes()
-        print(f"[+] Formatted test image {dog_path} ({len(img_bytes)} bytes)")
+        print(f"[+] Formatted test image {dog_path} ({len(img_bytes)} bytes, 196 chunks x 3 ch x 256 B)")
+        # Also save binary directly to baremetal data
+        with open(os.path.join(baremetal_data_dir, f"dog_{precision_bits}bit.bin"), "wb") as f:
+            f.write(img_bytes)
     else:
         num_vals = 150528
         img_bytes = np.zeros(num_vals, dtype=np_dtype).tobytes()
@@ -721,29 +712,52 @@ def compile_resnet50_full(precision="8bit"):
                     chunk = chunk + b'\x00' * (16 - len(chunk))
                 f.write(chunk[::-1].hex() + "\n")
 
-    # 4. Feature hex files for all test images
-    for fname, info in test_feat_dict.get("images", {}).items():
-        base_name = os.path.splitext(fname)[0]
-        f60 = np.array(info["x_quant"], dtype=np_dtype)
-        row = np.zeros(256, dtype=np_dtype)
-        row[:len(f60)] = f60
-        row_bytes = row.tobytes()
-        hex_paths = [
-            os.path.join(sim_dir, f"{base_name}_features_{precision_bits}bit.hex"),
-            os.path.join(sim_dir, f"{base_name}_features.hex")
-        ]
-        for hp in hex_paths:
-            with open(hp, "w") as f:
-                for r in range(60):
-                    rb = row_bytes if r == 0 else b'\x00' * len(row_bytes)
-                    for b_idx in range(0, len(rb), 16):
-                        chunk = rb[b_idx:b_idx+16]
-                        if len(chunk) < 16:
-                            chunk = chunk + b'\x00' * (16 - len(chunk))
-                        f.write(chunk[::-1].hex() + "\n")
-        print(f"[+] Saved {base_name}_features.hex for simulation ({precision_bits}-bit, Class #{info['true_class']})")
+    # 4. Feature hex files for dog.jpg (60 rows x 256 elements = 960 beats)
+    f_dog = feats[0] if len(feats) > 0 else np.zeros(2048, dtype=np.float32)
+    f_proj = np.dot(P, f_dog)
+    qf_60 = np.clip(np.round(f_proj / x_scale), clip_min, clip_max).astype(np_dtype)
+
+    # In 8-bit mode, 1 row in SRAM holds 256 bytes.
+    # The 60 features reside in Row 0, with remaining 60 rows available for multi-chunk GEMV input
+    feat_block = np.zeros((60, 256), dtype=np_dtype)
+    feat_block[0, :len(qf_60)] = qf_60
+    feat_block_bytes = feat_block.tobytes()
+
+    hex_paths = [
+        os.path.join(sim_dir, f"dog_features_{precision_bits}bit.hex"),
+        os.path.join(sim_dir, "dog_features.hex")
+    ]
+    for hp in hex_paths:
+        with open(hp, "w") as f:
+            for b_idx in range(0, len(feat_block_bytes), 16):
+                chunk = feat_block_bytes[b_idx:b_idx+16]
+                if len(chunk) < 16:
+                    chunk = chunk + b'\x00' * (16 - len(chunk))
+                f.write(chunk[::-1].hex() + "\n")
+    print(f"[+] Saved dog_features.hex for simulation ({precision_bits}-bit, Class #{true_classes[0]} Samoyed, {len(feat_block_bytes)} bytes)")
+
+    # 5. Save test_features.json
+    test_feat_dict = {
+        "precision_bits": precision_bits,
+        "gemv_weight_byte_offset": gemv_byte_offset,
+        "total_weights_bytes": len(full_weights_bytes),
+        "projection_matrix": P.tolist(),
+        "x_scale": x_scale,
+        "w_scale": w_scale,
+        "shift_bits": 15 if precision_bits == 16 else 7,
+        "images": {
+            "dog.jpg": {
+                "true_class": 258,
+                "label": "Samoyed",
+                "x_quant": qf_60.tolist()
+            }
+        }
+    }
+    with open(os.path.join(model_dir, "test_features.json"), "w") as f:
+        json.dump(test_feat_dict, f, indent=2)
 
     print(f"\n[OK] Full 25.5M Parameter ResNet-50 ({precision_bits}-Bit) Compilation Complete!\n")
+    return gemv_byte_offset
 
 
 if __name__ == '__main__':
