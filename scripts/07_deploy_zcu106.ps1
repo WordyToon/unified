@@ -12,7 +12,7 @@
 ================================================================================
 #>
 param(
-    [ValidateSet("all", "mnist", "resnet50", "mobilenetv2", "efficientnetb0")]
+    [ValidateSet("all", "mnist", "resnet50", "resnet50_head", "mobilenetv2", "efficientnetb0")]
     [string]$Model = "all",
 
     [ValidateSet("8bit", "16bit")]

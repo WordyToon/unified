@@ -92,6 +92,13 @@ if {$MODEL eq "mnist"} {
     set ADDR_IMAGE   0x20100000
     set ADDR_WEIGHTS 0x31000000
     set MODEL_CODE   2
+} elseif {$MODEL eq "resnet50_head"} {
+    set weights_bin  [file join $data_dir "resnet50_${PRECISION}_weights.bin"]
+    set ucode_bin    [file join $data_dir "resnet50_${PRECISION}_microcode.bin"]
+    set image_bin    [file join $data_dir "${IMAGE}_${PRECISION}.bin"]
+    set ADDR_IMAGE   0x20100000
+    set ADDR_WEIGHTS 0x31000000
+    set MODEL_CODE   5
 } elseif {$MODEL eq "mobilenetv2"} {
     set weights_bin  [file join $data_dir "mobilenetv2_${PRECISION}_weights.bin"]
     set ucode_bin    [file join $data_dir "mobilenetv2_${PRECISION}_microcode.bin"]
@@ -263,6 +270,13 @@ if {$MODEL eq "all"} {
         dow -data $image_bin $ADDR_IMAGE
     } else {
         puts "(!!) Test image not found: $image_bin  (model will use whatever is in DDR)"
+    }
+
+    # Preload precomputed 15,360-byte features if available (for Mode 5 fast GEMV check & verification)
+    set feat_bin [file join $data_dir "${IMAGE}_features_${PRECISION}.bin"]
+    if {[file exists $feat_bin]} {
+        puts "(*) Downloading features -> DDR 0x20124C00: $feat_bin"
+        dow -data $feat_bin 0x20124C00
     }
 
     if {[file exists $ucode_bin]} {

@@ -145,7 +145,7 @@ def main():
             stage_cnt += 1
 
     # Stage 53: 1x1 Projection Conv
-    stages_info.append({"stage": stage_cnt, "name": "projection", "shift": 6})
+    stages_info.append({"stage": stage_cnt, "name": "projection", "shift": 0})
     stage_cnt += 1
 
     # Stage 54: GAP

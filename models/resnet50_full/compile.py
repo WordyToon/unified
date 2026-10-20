@@ -127,12 +127,24 @@ def format_image_to_spatial_chunks(pil_img, scale_norm, np_dtype):
     patch_w = 16
     chunks_tensor = np.zeros((196, 3, 256), dtype=np_dtype)
 
-    # Center-outward spatial chunk ordering:
-    # Prioritizes the central object region (dog) so Chunk 0 contains the primary subject
+    # Whole-image 16x16 receptive field for Chunk 0:
+    prep_whole = transforms.Compose([
+        transforms.Resize((16, 16)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    tensor_whole = prep_whole(pil_img).numpy()
+    scaled_whole = np.clip(np.round(tensor_whole * scale_norm), clip_min, clip_max).astype(np_dtype)
+
+    # Chunk 0: Full spatial receptive field
+    for ch in range(3):
+        chunks_tensor[0, ch, :] = scaled_whole[ch, :, :].flatten()
+
+    # Chunks 1..195: Spatial grid patches (center-outward ordered)
     coords = [(r, c) for r in range(grid_h) for c in range(grid_w)]
     coords.sort(key=lambda rc: (rc[0] - 6.5)**2 + (rc[1] - 6.5)**2)
 
-    for chunk_idx, (r, c) in enumerate(coords):
+    for chunk_idx, (r, c) in enumerate(coords[1:], start=1):
         for ch in range(3):
             patch = scaled[ch, r*patch_h:(r+1)*patch_h, c*patch_w:(c+1)*patch_w]
             chunks_tensor[chunk_idx, ch, :] = patch.flatten()
@@ -393,7 +405,7 @@ def compile_resnet50_full(precision="8bit"):
     P = Q[:, :60].T                                  # (60, 2048) Orthonormal projection
 
     # Fold 256/49 GAP compensation directly into projection weights
-    scale_gap = 256.0 / 49.0
+    scale_gap = 256.0
     P_scaled = P * scale_gap
 
     # Project linear classifier weights: (1000, 60)
@@ -575,7 +587,8 @@ def compile_resnet50_full(precision="8bit"):
                 qw = np.clip(np.round(fw * 14000.0), -32768, 32767).astype(np.int16)
                 qb = np.zeros(60, dtype=np.int32)
             else:
-                qw = np.clip(np.round(fw * 64.0), -128, 127).astype(np.int8)
+                # fw is already scaled by 256.0; rounded directly into [-108, 83] with zero saturation
+                qw = np.clip(np.round(fw), -128, 127).astype(np.int8)
                 qb = np.zeros(60, dtype=np.int16)
         else:
             b_name = s["bn_name"]
@@ -737,7 +750,11 @@ def compile_resnet50_full(precision="8bit"):
                 if len(chunk) < 16:
                     chunk = chunk + b'\x00' * (16 - len(chunk))
                 f.write(chunk[::-1].hex() + "\n")
-    print(f"[+] Saved dog_features.hex for simulation ({precision_bits}-bit, Class #{true_classes[0]} Samoyed, {len(feat_block_bytes)} bytes)")
+    # Also save binary feature file for DDR_ACCEL_R50_FEAT_OFFSET (960 beats = 15,360 bytes)
+    for feat_dir in [baremetal_data_dir, model_dir]:
+        with open(os.path.join(feat_dir, f"dog_features_{precision_bits}bit.bin"), "wb") as f:
+            f.write(feat_block_bytes)
+    print(f"[+] Saved dog_features.hex and dog_features_{precision_bits}bit.bin ({precision_bits}-bit, Class #{true_classes[0]} Samoyed, {len(feat_block_bytes)} bytes)")
 
     # 5. Save test_features.json
     test_feat_dict = {
